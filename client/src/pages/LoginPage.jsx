@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginUser } from '../api/auth';
 import Aurora from '../components/Aurora';
-import CartoonWelcome from '../components/CartoonWelcome'; // Import the new component
+import CartoonWelcome from '../components/CartoonWelcome';
+import Navbar from '../components/Navbar';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -30,7 +31,8 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative h-screen overflow-hidden">
+    <div className="min-h-screen flex flex-col relative h-screen overflow-hidden">
+      <Navbar />
       {/* Aurora Background */}
       <div className="absolute inset-0 -z-10 w-full h-full bg-gray-900">
         <Aurora

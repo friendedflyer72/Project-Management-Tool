@@ -25,5 +25,7 @@ apiClient.interceptors.request.use(
 export const loginUser = (userData) => apiClient.post('/auth/login', userData);
 export const registerUser = (userData) => apiClient.post('/auth/register', userData);
 
-// Board functions (new)
+// Board functions
 export const getUserBoards = () => apiClient.get('/boards');
+export const createBoard = (boardData) => apiClient.post('/boards', boardData);
+export const getBoardDetails = (id) => apiClient.get(`/boards/${id}`);
