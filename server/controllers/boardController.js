@@ -102,3 +102,25 @@ exports.getBoardById = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+exports.deleteBoard = async (req, res) => {
+  const { id } = req.params; // Board ID
+  const { id: userId } = req.user; // User ID
+
+  try {
+    // Check if the user owns the board before deleting
+    const deleteResult = await db.query(
+      "DELETE FROM boards WHERE id = $1 AND owner_id = $2 RETURNING id",
+      [id, userId]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      return res.status(403).json({ msg: 'Board not found or access denied' });
+    }
+
+    res.json({ msg: 'Board deleted' });
+    console.log("✅ Board deleted successfully");
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};

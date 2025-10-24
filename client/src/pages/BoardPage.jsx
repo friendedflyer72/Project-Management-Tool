@@ -1,9 +1,17 @@
 // src/pages/BoardPage.jsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBoardDetails } from "../api/auth";
+import {
+  getBoardDetails,
+  createList,
+  createCard,
+  deleteList,
+} from "../api/auth";
+import { TrashIcon } from "@heroicons/react/24/outline";
 import Navbar from "../components/Navbar";
 import Aurora from "../components/Aurora";
+import AddList from "../components/AddList";
+import AddCard from "../components/AddCard";
 
 const BoardPage = () => {
   const { id } = useParams(); // Get the board ID from the URL
@@ -36,7 +44,45 @@ const BoardPage = () => {
     };
     fetchBoard();
   }, [id, navigate]);
+  // --- NEW HANDLER for creating a list ---
+  const handleAddList = async (listName) => {
+    try {
+      // 1. Get the full response
+      const response = await createList({ name: listName, board_id: id });
 
+      // 2. Extract the new list from response.data
+      const newList = response.data;
+
+      // 3. Update state with the correct object
+      setBoard((prevBoard) => ({
+        ...prevBoard,
+        lists: [...prevBoard.lists, newList],
+      }));
+    } catch (err) {
+      console.error("Failed to create list:", err);
+    }
+  };
+  const handleAddCard = async (cardTitle, listId) => {
+    try {
+      // 1. Get the full response
+      const response = await createCard({ title: cardTitle, list_id: listId });
+
+      // 2. Extract the new card from response.data
+      const newCard = response.data;
+
+      // 3. Update state with the correct object
+      setBoard((prevBoard) => ({
+        ...prevBoard,
+        lists: prevBoard.lists.map((list) =>
+          list.id === listId
+            ? { ...list, cards: [...list.cards, newCard] } // Add new card
+            : list
+        ),
+      }));
+    } catch (err) {
+      console.error("Failed to create card:", err);
+    }
+  };
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col text-gray-200">
@@ -62,6 +108,20 @@ const BoardPage = () => {
       </div>
     );
   }
+  const handleDeleteList = async (listId) => {
+    if (window.confirm("Are you sure you want to delete this list?")) {
+      try {
+        await deleteList(listId);
+        // Update state to remove the list
+        setBoard((prevBoard) => ({
+          ...prevBoard,
+          lists: prevBoard.lists.filter((list) => list.id !== listId),
+        }));
+      } catch (err) {
+        console.error("Failed to delete list:", err);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col text-gray-200">
@@ -89,9 +149,17 @@ const BoardPage = () => {
               key={list.id}
               className="bg-gray-800 rounded-lg p-3 w-72 flex-shrink-0"
             >
-              {/* List Header */}
-              <h3 className="font-semibold text-white mb-3">{list.name}</h3>
-
+              <div className="flex justify-between items-center mb-3">
+                {/* List Header */}
+                <h3 className="font-semibold text-white mb-3">{list.name}</h3>
+                <button
+                  onClick={() => handleDeleteList(list.id)}
+                  className="p-1 text-gray-500 hover:text-red-500 rounded transition-colors"
+                  title="Delete list"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+              </div>
               {/* Cards Container */}
               <div className="space-y-3">
                 {/* Map over the cards */}
@@ -103,19 +171,16 @@ const BoardPage = () => {
                     <p className="text-sm text-gray-100">{card.title}</p>
                   </div>
                 ))}
-
-                {/* --- Add new card button (placeholder) --- */}
-                <button className="text-gray-400 hover:text-white hover:bg-gray-600 p-2 rounded-md w-full text-left transition-colors">
-                  + Add a card
-                </button>
+                <AddCard
+                  listId={list.id}
+                  onCardCreated={(title) => handleAddCard(title, list.id)}
+                />
               </div>
             </div>
           ))}
 
           {/* --- Add new list button (placeholder) --- */}
-          <button className="bg-gray-800 bg-opacity-50 hover:bg-opacity-100 text-gray-300 font-medium p-3 rounded-lg w-72 flex-shrink-0 transition-colors">
-            + Add another list
-          </button>
+          <AddList boardId={id} onListCreated={handleAddList} />
         </div>
       </div>
     </div>

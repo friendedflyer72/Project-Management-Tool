@@ -1,10 +1,11 @@
 // src/pages/DashboardPage.jsx
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { getUserBoards } from "../api/auth";
+import { getUserBoards, deleteBoard } from "../api/auth";
 import Aurora from "../components/Aurora";
 import Navbar from "../components/Navbar";
-import CreateboardModal from '../components/CreateboardModal';
+import { TrashIcon } from "@heroicons/react/24/outline";
+import CreateboardModal from "../components/CreateboardModal";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const DashboardPage = () => {
   };
   const handleBoardCreated = (newBoard) => {
     // Add the new board to the existing list without a full refresh
-    setBoards(prevBoards => [...prevBoards, newBoard]);
+    setBoards((prevBoards) => [...prevBoards, newBoard]);
   };
   // --- Fetch Boards on Page Load ---
   useEffect(() => {
@@ -49,6 +50,29 @@ const DashboardPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleDeleteBoard = async (e, boardId) => {
+    // Stop the click from navigating to the board page
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (
+      window.confirm(
+        "Are you sure you want to delete this board? This action is permanent."
+      )
+    ) {
+      try {
+        await deleteBoard(boardId);
+        // Update state to remove the board
+        setBoards((prevBoards) =>
+          prevBoards.filter((board) => board.id !== boardId)
+        );
+      } catch (err) {
+        console.error("Failed to delete board:", err);
+        // You could set an error state here
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col text-gray-200">
       {/* --- Navbar --- */}
@@ -66,7 +90,10 @@ const DashboardPage = () => {
         {/* --- Header --- */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-3xl font-bold text-white">Your Boards</h2>
-          <button className="py-2 px-4 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-gray-900" onClick={() => setIsModalOpen(true)}>
+          <button
+            className="py-2 px-4 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            onClick={() => setIsModalOpen(true)}
+          >
             + Create New Board
           </button>
         </div>
@@ -81,13 +108,20 @@ const DashboardPage = () => {
             {boards.length > 0 ? (
               boards.map((board) => (
                 <Link
-                  to={`/board/${board.id}`} // We'll build this route next
+                  to={`/board/${board.id}`}
                   key={board.id}
-                  className="block bg-gray-800 p-6 rounded-lg shadow-lg hover:bg-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                  className="relative group block bg-gray-800 p-6 rounded-lg shadow-lg hover:bg-gray-700"
                 >
                   <h3 className="text-xl font-semibold text-white">
                     {board.name}
                   </h3>
+                  <button
+                    onClick={(e) => handleDeleteBoard(e, board.id)}
+                    className="absolute top-6 right-5 p-1.5 text-gray-500 hover:text-red-500 bg-gray-800 rounded-full opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-red-500"
+                    title="Delete board"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
                 </Link>
               ))
             ) : (

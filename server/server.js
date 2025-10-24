@@ -12,7 +12,8 @@ app.use(express.json()); // Allow server to accept JSON in request body
 // === ROUTES ===
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/boards', require('./routes/boards'));
-// Add routes for lists and cards later
+app.use('/api/lists', require('./routes/lists'));
+app.use('/api/cards', require('./routes/cards'));
 
 // Test route
 app.get('/', (req, res) => {
