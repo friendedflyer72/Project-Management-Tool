@@ -25,11 +25,43 @@ exports.createCard = async (req, res) => {
 
     // 3. Insert the new card
     const newCard = await db.query(
-      "INSERT INTO cards (title, list_id, position) VALUES ($1, $2, $3) RETURNING id, title, position, list_id",
+      "INSERT INTO cards (title, list_id, position) VALUES ($1, $2, $3) RETURNING id, title, position, list_id, description, created_at",
       [title, list_id, nextPosition]
     );
 
     res.status(201).json(newCard.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
+exports.updateCard = async (req, res) => {
+  const { id } = req.params; // Card ID
+  const { description } = req.body; // Only updating description for now
+  const { id: userId } = req.user;
+
+  try {
+    // 1. Verify user has access to this card
+    const check = await db.query(
+      `SELECT c.id FROM cards c
+       JOIN lists l ON c.list_id = l.id
+       JOIN boards b ON l.board_id = b.id
+       WHERE c.id = $1 AND b.owner_id = $2`,
+      [id, userId]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(403).json({ msg: 'Card not found or access denied' });
+    }
+
+    // 2. Update the card
+    const updatedCard = await db.query(
+      "UPDATE cards SET description = $1 WHERE id = $2 RETURNING *",
+      [description, id]
+    );
+
+    res.json(updatedCard.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

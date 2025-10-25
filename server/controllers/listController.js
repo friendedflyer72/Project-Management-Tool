@@ -40,6 +40,58 @@ exports.createList = async (req, res) => {
   }
 };
 
+exports.updateCardOrder = async (req, res) => {
+  const { id: listId } = req.params; // Get listId from URL
+  const { cardIds } = req.body; // Get the array of card IDs from the body
+  const { id: userId } = req.user;
+
+  if (!cardIds || !Array.isArray(cardIds)) {
+    return res.status(400).json({ msg: 'Invalid data' });
+  }
+
+  const client = await db.pool.connect(); // Use a client for transaction
+
+  try {
+    // 1. Check if user owns this list
+    const check = await client.query(
+      `SELECT b.owner_id FROM lists l
+       JOIN boards b ON l.board_id = b.id
+       WHERE l.id = $1 AND b.owner_id = $2`,
+      [listId, userId]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    // 2. Start transaction
+    await client.query('BEGIN');
+
+    // 3. Loop through the cardIds and update the position for each
+    // We use index as the new position
+    for (let i = 0; i < cardIds.length; i++) {
+      const cardId = cardIds[i];
+      const newPosition = i;
+      
+      await client.query(
+        "UPDATE cards SET position = $1, list_id = $2 WHERE id = $3",
+        [newPosition, listId, cardId]
+      );
+    }
+    
+    // 4. Commit transaction
+    await client.query('COMMIT');
+    
+    res.json({ msg: 'Card order updated' });
+
+  } catch (err) {
+    await client.query('ROLLBACK'); // Roll back on error
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  } finally {
+    client.release(); // Release client back to pool
+  }
+};
 exports.deleteList = async (req, res) => {
   const { id } = req.params; // List ID
   const { id: userId } = req.user; // User ID

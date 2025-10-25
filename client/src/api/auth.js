@@ -30,10 +30,13 @@ export const getUserBoards = () => apiClient.get('/boards');
 export const createBoard = (boardData) => apiClient.post('/boards', boardData);
 export const getBoardDetails = (id) => apiClient.get(`/boards/${id}`);
 export const deleteBoard = (id) => apiClient.delete(`/boards/${id}`);
+export const updateListOrder = (boardId, listIds) => apiClient.put(`/boards/${boardId}/lists`, { listIds });
 
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);
 export const deleteList = (id) => apiClient.delete(`/lists/${id}`);
+export const updateCardOrder = (listId, cardIds) => apiClient.put(`/lists/${listId}/cards`, { cardIds });
 
 // Card functions
 export const createCard = (cardData) => apiClient.post('/cards', cardData);
+export const updateCard = (id, cardData) => apiClient.put(`/cards/${id}`, cardData);
