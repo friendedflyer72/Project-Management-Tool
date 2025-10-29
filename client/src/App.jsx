@@ -6,6 +6,8 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import BoardPage from './pages/BoardPage';
 import { BrowserRouter } from 'react-router-dom';
+import EditProfilePage from './pages/EditProfilePage';
+
 function App() {
   return (
     <BrowserRouter>
@@ -15,7 +17,8 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/dashboard" element={<DashboardPage />} /> 
       <Route path="/board/:id" element={<BoardPage />} />
-      {/* We will protect this dashboard route later */}
+      <Route path="/profile" element={<EditProfilePage />} />
+      {/* We will protect this dashboard route later */} 
     </Routes>
     </BrowserRouter>
   );

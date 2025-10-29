@@ -25,6 +25,7 @@ const RegisterPage = () => {
     try {
       const response = await registerUser(formData);
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('username', response.data.username);
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.msg || 'Registration failed.');

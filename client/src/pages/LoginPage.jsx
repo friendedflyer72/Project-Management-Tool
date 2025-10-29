@@ -24,6 +24,7 @@ const LoginPage = () => {
     try {
       const response = await loginUser(formData);
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('username', response.data.username);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.msg || 'Login failed. Please try again.');

@@ -40,3 +40,8 @@ export const updateCardOrder = (listId, cardIds) => apiClient.put(`/lists/${list
 // Card functions
 export const createCard = (cardData) => apiClient.post('/cards', cardData);
 export const updateCard = (id, cardData) => apiClient.put(`/cards/${id}`, cardData);
+
+// Profile functions
+export const getMe = () => apiClient.get('/auth/me');
+export const updateMe = (userData) => apiClient.put('/auth/me', userData);
+export const changePassword = (passwordData) => apiClient.post('/auth/change-password', passwordData);
