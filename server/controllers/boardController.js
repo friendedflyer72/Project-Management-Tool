@@ -1,10 +1,21 @@
 // server/controllers/boardController.js
 const db = require('../db');
+const { checkBoardAccess } = require('../utils/authHelpers');
 // Get all boards for the logged-in user
 exports.getUserBoards = async (req, res) => {
   try {
-    const result = await db.query("SELECT * FROM boards WHERE owner_id = $1", [req.user.id]);
-    res.json(result.rows);
+    // This query gets boards the user owns AND boards they are a member of.
+    // add a 'role' field so the frontend knows who is the owner.
+    const query = `
+      (SELECT id, name, owner_id, 'owner' as role FROM boards
+       WHERE owner_id = $1)
+      UNION
+      (SELECT b.id, b.name, b.owner_id, 'member' as role FROM boards b
+       JOIN board_members bm ON b.id = bm.board_id
+       WHERE bm.user_id = $1)
+    `;
+    const { rows } = await db.query(query, [req.user.id]);
+    res.json(rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -34,6 +45,11 @@ exports.getBoardById = async (req, res) => {
   const { id } = req.params; // Board ID from URL
   const { id: userId } = req.user; // User ID from auth token
 
+  const hasAccess = await checkBoardAccess(userId, id);
+  if (!hasAccess) {
+    return res.status(404).json({ msg: 'Board not found or access denied' });
+  }
+
   try {
     // This query joins boards, lists, and cards.
     // We use LEFT JOIN in case a board has no lists, or a list has no cards.
@@ -48,11 +64,11 @@ SELECT
       FROM boards b
       LEFT JOIN lists l ON b.id = l.board_id
       LEFT JOIN cards c ON l.id = c.list_id
-      WHERE b.id = $1 AND b.owner_id = $2
+      WHERE b.id = $1
       ORDER BY l.position, c.position;
     `;
 
-    const { rows } = await db.query(query, [id, userId]);
+    const { rows } = await db.query(query, [id]);
 
     if (rows.length === 0) {
       // This could mean the board doesn't exist OR the user doesn't own it
@@ -176,5 +192,43 @@ exports.updateListOrder = async (req, res) => {
     res.status(500).send('Server Error');
   } finally {
     client.release(); // Release client back to pool
+  }
+};
+exports.inviteUser = async (req, res) => {
+  const { id: boardId } = req.params;
+  const { email } = req.body;
+  const { id: ownerId } = req.user;
+
+  try {
+    // 1. Check if the logged-in user is the *owner* (only owners can invite)
+    const board = await db.query(
+      "SELECT id FROM boards WHERE id = $1 AND owner_id = $2",
+      [boardId, ownerId]
+    );
+    if (board.rows.length === 0) {
+      return res.status(403).json({ msg: 'Only the board owner can invite users.' });
+    }
+
+    // 2. Find the user to invite by their email
+    const userToInvite = await db.query("SELECT id FROM users WHERE email = $1", [email]);
+    if (userToInvite.rows.length === 0) {
+      return res.status(404).json({ msg: 'User with that email not found.' });
+    }
+    const inviteeId = userToInvite.rows[0].id;
+
+    // 3. Add the user to the board_members table
+    await db.query(
+      "INSERT INTO board_members (user_id, board_id) VALUES ($1, $2)",
+      [inviteeId, boardId]
+    );
+
+    res.status(201).json({ msg: 'User added to board.' });
+  } catch (err) {
+    // Handle "user already in board" error
+    if (err.code === '23505') {
+      return res.status(400).json({ msg: 'User is already a member of this board.' });
+    }
+    console.error(err.message);
+    res.status(500).send('Server Error');
   }
 };

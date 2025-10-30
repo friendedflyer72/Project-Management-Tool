@@ -1,10 +1,15 @@
 // server/controllers/listController.js
 const db = require('../db');
-
+const { checkBoardAccess } = require('../utils/authHelpers');
 exports.createList = async (req, res) => {
   const { name, board_id } = req.body;
   const { id: userId } = req.user;
 
+  const hasAccess = await checkBoardAccess(userId, board_id);
+  if (!hasAccess) {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
+  
   try {
     // 1. Check if the user owns the board
     const boardCheck = await db.query(
@@ -72,16 +77,16 @@ exports.updateCardOrder = async (req, res) => {
     for (let i = 0; i < cardIds.length; i++) {
       const cardId = cardIds[i];
       const newPosition = i;
-      
+
       await client.query(
         "UPDATE cards SET position = $1, list_id = $2 WHERE id = $3",
         [newPosition, listId, cardId]
       );
     }
-    
+
     // 4. Commit transaction
     await client.query('COMMIT');
-    
+
     res.json({ msg: 'Card order updated' });
 
   } catch (err) {

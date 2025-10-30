@@ -31,6 +31,7 @@ export const createBoard = (boardData) => apiClient.post('/boards', boardData);
 export const getBoardDetails = (id) => apiClient.get(`/boards/${id}`);
 export const deleteBoard = (id) => apiClient.delete(`/boards/${id}`);
 export const updateListOrder = (boardId, listIds) => apiClient.put(`/boards/${boardId}/lists`, { listIds });
+export const inviteUserToBoard = (boardId, email) => apiClient.post(`/boards/${boardId}/invite`, { email });
 
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);

@@ -1,10 +1,14 @@
 // server/controllers/cardController.js
 const db = require('../db');
-
+const { checkBoardAccess } = require('../utils/authHelpers');
 exports.createCard = async (req, res) => {
   const { title, list_id } = req.body;
   const { id: userId } = req.user;
 
+  const hasAccess = await checkBoardAccess(userId, board_id);
+  if (!hasAccess) {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
   try {
     // 1. Check if the user has access to this list (by checking board ownership)
     const listCheck = await db.query(

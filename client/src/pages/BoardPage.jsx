@@ -17,6 +17,7 @@ import Aurora from "../components/Aurora";
 import AddList from "../components/AddList";
 import AddCard from "../components/AddCard";
 import CardModal from "../components/CardModal";
+import InviteModal from "../components/InviteModal";
 
 const BoardPage = () => {
   const { id } = useParams(); // Get the board ID from the URL
@@ -25,6 +26,7 @@ const BoardPage = () => {
   const [selectedCard, setSelectedCard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -262,6 +264,12 @@ const BoardPage = () => {
       {/* Board Header */}
       <div className="container mx-auto p-4 sm:p-6">
         <h1 className="text-3xl font-bold text-white mb-4">{board.name}</h1>
+        <button
+          onClick={() => setIsInviteModalOpen(true)}
+          className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
+        >
+          Invite
+        </button>
       </div>
 
       {/* Board Content (Lists) */}
@@ -370,6 +378,11 @@ const BoardPage = () => {
         onClose={() => setSelectedCard(null)}
         cardData={selectedCard}
         onCardUpdate={handleCardUpdate}
+      />
+      <InviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        boardId={id}
       />
     </div>
   );
