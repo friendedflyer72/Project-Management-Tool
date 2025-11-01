@@ -6,6 +6,7 @@ import Aurora from "../components/Aurora";
 import Navbar from "../components/Navbar";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import CreateboardModal from "../components/CreateboardModal";
+import { toast } from "react-hot-toast";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const DashboardPage = () => {
   const handleBoardCreated = (newBoard) => {
     // Add the new board to the existing list without a full refresh
     setBoards((prevBoards) => [...prevBoards, newBoard]);
+    toast.success(`Board ${newBoard.name} created successfully!`);
   };
   // --- Fetch Boards on Page Load ---
   useEffect(() => {
@@ -33,7 +35,8 @@ const DashboardPage = () => {
         if (
           err.response &&
           (err.response.status === 401 || err.response.status === 400)
-        ) {
+        ) 
+        {
           // 400 for "Token is not valid", 401 for "No token"
           handleTokenError(); // Log the user out
         } else {
@@ -66,6 +69,7 @@ const DashboardPage = () => {
         setBoards((prevBoards) =>
           prevBoards.filter((board) => board.id !== boardId)
         );
+        toast.success("Board deleted successfully!");
       } catch (err) {
         console.error("Failed to delete board:", err);
         // You could set an error state here

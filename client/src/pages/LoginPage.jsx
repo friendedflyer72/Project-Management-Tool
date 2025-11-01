@@ -5,6 +5,7 @@ import { loginUser } from '../api/auth';
 import Aurora from '../components/Aurora';
 import CartoonWelcome from '../components/CartoonWelcome';
 import Navbar from '../components/Navbar';
+import toast from 'react-hot-toast';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ const LoginPage = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('username', response.data.username);
       navigate('/dashboard');
+      toast.success('Login successful!');
     } catch (err) {
       setError(err.response?.data?.msg || 'Login failed. Please try again.');
     }

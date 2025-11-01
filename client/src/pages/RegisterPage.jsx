@@ -5,6 +5,7 @@ import { registerUser } from '../api/auth';
 import Aurora from '../components/Aurora';
 import CartoonWelcome from '../components/CartoonWelcome';
 import Navbar from '../components/Navbar';
+import toast from 'react-hot-toast';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ const RegisterPage = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('username', response.data.username);
       navigate('/login');
+      toast.success('Registration successful!');
     } catch (err) {
       setError(err.response?.data?.msg || 'Registration failed.');
     }

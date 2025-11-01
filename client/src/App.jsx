@@ -1,6 +1,7 @@
 // src/App.jsx
 // src/App.jsx
 import { Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -10,6 +11,19 @@ import EditProfilePage from './pages/EditProfilePage';
 
 function App() {
   return (
+    <> 
+      
+      
+      <Toaster
+        position="bottom-right" // This sets the position
+        toastOptions={{
+          // Define default options
+          style: {
+            background: '#7008e7', // Dark background
+            color: '#fff', // Light text
+          },
+        }}
+    />
     <BrowserRouter>
     <Routes>
       <Route path="/" element={<LoginPage />} /> {/* Default route */}
@@ -21,6 +35,7 @@ function App() {
       {/* We will protect this dashboard route later */} 
     </Routes>
     </BrowserRouter>
+    </>
   );
 }
 

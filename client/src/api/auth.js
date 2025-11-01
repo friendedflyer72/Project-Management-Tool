@@ -5,7 +5,6 @@ const apiClient = axios.create({
   baseURL: 'http://localhost:5000/api',
 });
 
-// --- This is the new, important part ---
 // Use an interceptor to add the token to all requests
 apiClient.interceptors.request.use(
   (config) => {
