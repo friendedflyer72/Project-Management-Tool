@@ -41,6 +41,8 @@ export const updateCardOrder = (listId, cardIds) => apiClient.put(`/lists/${list
 // Card functions
 export const createCard = (cardData) => apiClient.post('/cards', cardData);
 export const updateCard = (id, cardData) => apiClient.put(`/cards/${id}`, cardData);
+export const deleteCard = (id) => apiClient.delete(`/cards/${id}`);
+export const duplicateCard = (id) => apiClient.post(`/cards/${id}/duplicate`);
 
 // Profile functions
 export const getMe = () => apiClient.get('/auth/me');

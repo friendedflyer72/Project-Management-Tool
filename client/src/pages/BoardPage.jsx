@@ -6,16 +6,29 @@ import {
   createList,
   createCard,
   deleteList,
-  updateCard,
+  updateCard, // We need this for the modal
   updateCardOrder,
   updateListOrder,
 } from "../api/auth";
-import { TrashIcon } from "@heroicons/react/24/outline";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+
+// 1. Import dnd-kit components
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove } from "@dnd-kit/sortable";
+
+// 2. Import our new components
+import BoardList from "../components/BoardList";
+import BoardCard from "../components/BoardCard";
+
 import Navbar from "../components/Navbar";
 import Aurora from "../components/Aurora";
 import AddList from "../components/AddList";
-import AddCard from "../components/AddCard";
 import CardModal from "../components/CardModal";
 import InviteModal from "../components/InviteModal";
 
@@ -27,6 +40,15 @@ const BoardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Only start dragging after moving 8px
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -210,6 +232,178 @@ const BoardPage = () => {
     ).catch((err) => console.error("Failed to update destination list", err));
   };
 
+  const handleDeleteList = async (listId) => {
+    if (window.confirm("Are you sure you want to delete this list?")) {
+      try {
+        await deleteList(listId);
+        // Update state to remove the list
+        setBoard((prevBoard) => ({
+          ...prevBoard,
+          lists: prevBoard.lists.filter((list) => list.id !== listId),
+        }));
+      } catch (err) {
+        console.error("Failed to delete list:", err);
+      }
+    }
+  };
+  const handleCardDeleted = (deletedCardId) => {
+    setBoard((prevBoard) => ({
+      ...prevBoard,
+      lists: prevBoard.lists.map((list) => ({
+        ...list,
+        // Filter out the deleted card
+        cards: list.cards.filter((card) => card.id !== deletedCardId),
+      })),
+    }));
+  };
+
+  // --- ADD THIS HANDLER ---
+  const handleCardDuplicated = (newCard) => {
+    setBoard((prevBoard) => ({
+      ...prevBoard,
+      lists: prevBoard.lists.map((list) =>
+        // Find the correct list
+        list.id === newCard.list_id
+          ? // Add the new card to the end of its card array
+            { ...list, cards: [...list.cards, newCard] }
+          : list
+      ),
+    }));
+  };
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    // If no drop target
+    if (!over) return;
+
+    // If dropping in the same place
+    if (active.id === over.id) return;
+
+    const activeList = board.lists.find((list) =>
+      list.cards.some((card) => card.id === active.id)
+    );
+    const overList = board.lists.find(
+      (list) =>
+        list.id === over.id || list.cards.some((card) => card.id === over.id)
+    );
+
+    // --- CASE 1: Dragging a LIST ---
+    if (active.data.current?.type === "list") {
+      // Find the old and new index of the list
+      const oldIndex = board.lists.findIndex((list) => list.id === active.id);
+      const newIndex = board.lists.findIndex((list) => list.id === over.id);
+
+      // Reorder the lists array
+      const newLists = arrayMove(board.lists, oldIndex, newIndex);
+
+      // Optimistic state update
+      setBoard((prev) => ({ ...prev, lists: newLists }));
+
+      // API call
+      updateListOrder(
+        id,
+        newLists.map((list) => list.id)
+      ).catch((err) => console.error("Failed to reorder list", err)); // TODO: Revert on fail
+      return;
+    }
+
+    // --- CASE 2: Dragging a CARD ---
+    if (active.data.current?.type === "card") {
+      let overListId = over.id; // This is the list ID if dropping on a list
+
+      // Check if we dropped on a card instead of a list
+      const overCard = overList.cards.find((card) => card.id === over.id);
+      if (overCard) {
+        overListId = overList.id; // We still want the list ID
+      }
+
+      // Find the old and new list
+      const sourceList = activeList;
+      const destList = board.lists.find((list) => list.id === overListId);
+
+      // --- 2a: Moving card within the SAME list ---
+      if (sourceList.id === destList.id) {
+        const oldIndex = sourceList.cards.findIndex(
+          (card) => card.id === active.id
+        );
+        const newIndex = destList.cards.findIndex(
+          (card) => card.id === over.id
+        );
+
+        const newCards = arrayMove(sourceList.cards, oldIndex, newIndex);
+
+        // Optimistic state update
+        setBoard((prev) => ({
+          ...prev,
+          lists: prev.lists.map((list) =>
+            list.id === sourceList.id ? { ...list, cards: newCards } : list
+          ),
+        }));
+
+        // API call
+        updateCardOrder(
+          sourceList.id,
+          newCards.map((card) => card.id)
+        ).catch((err) => console.error("Failed to reorder card", err));
+      }
+      // --- 2b: Moving card to a DIFFERENT list ---
+      else {
+        // Find card
+        const cardToMove = sourceList.cards.find(
+          (card) => card.id === active.id
+        );
+
+        // Remove from old list
+        const sourceCards = sourceList.cards.filter(
+          (card) => card.id !== active.id
+        );
+
+        // Find new index in destination list
+        let newIndex = destList.cards.findIndex((card) => card.id === over.id);
+        if (newIndex === -1) newIndex = destList.cards.length; // Drop at end if on list
+
+        // Add to new list
+        const destCards = [...destList.cards];
+        destCards.splice(newIndex, 0, cardToMove);
+
+        // Optimistic state update
+        setBoard((prev) => ({
+          ...prev,
+          lists: prev.lists.map((list) => {
+            if (list.id === sourceList.id)
+              return { ...list, cards: sourceCards };
+            if (list.id === destList.id) return { ...list, cards: destCards };
+            return list;
+          }),
+        }));
+
+        // API calls for BOTH lists
+        updateCardOrder(
+          sourceList.id,
+          sourceCards.map((card) => card.id)
+        ).catch((err) => console.error("Failed to update source list", err));
+        updateCardOrder(
+          destList.id,
+          destCards.map((card) => card.id)
+        ).catch((err) => console.error("Failed to update dest list", err));
+      }
+    }
+  };
+
+  // 5. --- NEW handleDragStart ---
+  // We need this to identify if we are dragging a 'list' or a 'card'
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const isList = board.lists.some((list) => list.id === active.id);
+
+    // Store the type in the 'data' property
+    if (isList) {
+      active.data.current = { type: "list" };
+    } else {
+      active.data.current = { type: "card" };
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col text-gray-200">
@@ -229,26 +423,20 @@ const BoardPage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-red-400">
+      <div className="min-h-screen flex flex-col text-red-400">
+        <div className="absolute inset-0 -z-10 w-full h-full bg-gray-900">
+          <Aurora
+            colorStops={["#3A29FF", "#eb2d66ff", "#FF3232"]}
+            blend={0.5}
+            amplitude={1.0}
+            speed={0.5}
+          />
+        </div>
         <Navbar />
         <p className="p-8">{error}</p>
       </div>
     );
   }
-  const handleDeleteList = async (listId) => {
-    if (window.confirm("Are you sure you want to delete this list?")) {
-      try {
-        await deleteList(listId);
-        // Update state to remove the list
-        setBoard((prevBoard) => ({
-          ...prevBoard,
-          lists: prevBoard.lists.filter((list) => list.id !== listId),
-        }));
-      } catch (err) {
-        console.error("Failed to delete list:", err);
-      }
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col text-gray-200">
@@ -273,111 +461,48 @@ const BoardPage = () => {
       </div>
 
       {/* Board Content (Lists) */}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="all-lists" direction="horizontal" type="list">
-          {(provided) => (
-            <div
-              className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 pt-0"
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-            >
-              {/* We'll use a horizontal scroll container */}
-              <div className="flex space-x-4 overflow-x-auto pb-4">
-                {/* Map over the lists */}
-                {board.lists.map((list, index) => (
-                  <Draggable
-                    key={list.id}
-                    draggableId={list.id.toString()}
-                    index={index}
-                  >
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps} // This allows dragging the whole list
-                      >
-                        <Droppable
-                          key={list.id}
-                          droppableId={list.id.toString()}
-                          type="card"
-                        >
-                          {(dropProvided, dropSnapshot) => (
-                            <div
-                              ref={dropProvided.innerRef}
-                              {...dropProvided.droppableProps}
-                              className={`bg-gray-800 rounded-lg p-3 w-72 flex-shrink-0 ${
-                                dropSnapshot.isDraggingOver ? "bg-gray-700" : ""
-                              }`}
-                            >
-                              <div className="flex justify-between items-center mb-3">
-                                {/* List Header */}
-                                <h3 className="font-semibold text-white">
-                                  {list.name}
-                                </h3>
-                                <button
-                                  onClick={() => handleDeleteList(list.id)}
-                                  className="p-1 text-gray-500 hover:text-red-500 rounded transition-colors"
-                                  title="Delete list"
-                                >
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                              </div>
-                              {/* Cards Container */}
-                              <div className="space-y-3">
-                                {list.cards.map((card, index) => (
-                                  // 6. Wrap the card in a Draggable
-                                  <Draggable
-                                    key={card.id}
-                                    draggableId={card.id.toString()}
-                                    index={index}
-                                  >
-                                    {(provided, snapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        onClick={() => setSelectedCard(card)}
-                                        className={`w-full text-left bg-gray-700 p-3 rounded-md shadow-sm hover:bg-gray-600 transition-colors ${
-                                          snapshot.isDragging
-                                            ? "ring-2 ring-pink-500"
-                                            : ""
-                                        }`}
-                                      >
-                                        <p className="text-sm text-gray-100">
-                                          {card.title}
-                                        </p>
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                ))}
-                                {dropProvided.placeholder}
-                              </div>
-                              <AddCard
-                                listId={list.id}
-                                onCardCreated={(title) =>
-                                  handleAddCard(title, list.id)
-                                }
-                              />
-                            </div>
-                          )}
-                        </Droppable>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-                <AddList boardId={id} onListCreated={handleAddList} />
-              </div>
-            </div>
-          )}
-        </Droppable>
-      </DragDropContext>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 pt-0">
+          <div className="flex space-x-4 overflow-x-auto pb-4">
+            {/* We wrap all lists in ONE SortableContext */}
+            <SortableContext items={board.lists.map((list) => list.id)}>
+              {board.lists.map((list) => (
+                <BoardList
+                  key={list.id}
+                  list={list}
+                  cards={list.cards}
+                  onDeleteList={handleDeleteList}
+                  onCardCreated={(title) => handleAddCard(title, list.id)}
+                >
+                  {/* We map the cards HERE and pass them as children */}
+                  {list.cards.map((card) => (
+                    <BoardCard
+                      key={card.id}
+                      card={card}
+                      onClick={() => setSelectedCard(card)}
+                    />
+                  ))}
+                </BoardList>
+              ))}
+            </SortableContext>
+
+            <AddList boardId={id} onListCreated={handleAddList} />
+          </div>
+        </div>
+      </DndContext>
 
       <CardModal
         isOpen={!!selectedCard}
         onClose={() => setSelectedCard(null)}
         cardData={selectedCard}
         onCardUpdate={handleCardUpdate}
+        onCardDelete={handleCardDeleted}
+        onCardDuplicate={handleCardDuplicated}
       />
       <InviteModal
         isOpen={isInviteModalOpen}

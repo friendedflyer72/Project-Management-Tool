@@ -1,5 +1,6 @@
 // src/components/Navbar.jsx
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const Navbar = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
+    toast.success('Logout successful!');
     navigate("/login");
   };
 
@@ -26,7 +28,7 @@ const Navbar = () => {
               to={token ? "/dashboard" : "/login"}  
               className="text-2xl font-bold text-white hover:text-gray-300 transition-colors"
             >
-              Protask
+              Protasker
             </Link>
 
             {/* 3. Wrap board links in token check so they don't show on login page */}
