@@ -1,36 +1,101 @@
-// src/components/CardNewboard.jsx
-import { useState, useEffect } from 'react';
-// 1. Import new API functions
-import { updateCard, deleteCard, duplicateCard } from '../api/auth';
-import Newboard from './Newboard';
-// 2. Import new icons
-import { ClockIcon, TrashIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+// src/components/CardModal.jsx
+import { useState, useEffect } from "react";
+import {
+  updateCard,
+  deleteCard,
+  duplicateCard,
+  createLabel,
+  addLabelToCard,
+  removeLabelFromCard,
+  deleteLabel,
+} from "../api/auth";
+import Newboard from "./Newboard";
+import DatePicker from "react-datepicker";
+import LabelPopover from "./labelPopover";
+import {
+  ClockIcon,
+  TrashIcon,
+  DocumentDuplicateIcon,
+  CheckCircleIcon,
+  PlusIcon,
+  XMarkIcon,
+  SparklesIcon,
+} from "@heroicons/react/24/outline";
 
-// 3. Accept new props for delete/duplicate handlers
-const CardNewboard = ({ isOpen, onClose, cardData, onCardUpdate, onCardDelete, onCardDuplicate }) => {
-  const [description, setDescription] = useState('');
-  const [error, setError] = useState('');
+// Accept new props for delete/duplicate handlers
+const CardModal = ({
+  isOpen,
+  onClose,
+  cardData,
+  onCardUpdate,
+  onCardDelete,
+  onCardDuplicate,
+  onBoardUpdate,
+  boardLabels,
+  boardId,
+  onLabelDelete,
+}) => {
+  const [description, setDescription] = useState("");
+  const [labels, setLabels] = useState([]);
+  const [error, setError] = useState("");
+  const [dueDate, setDueDate] = useState(null);
+  const [checklist, setChecklist] = useState([]);
+  const [newItemText, setNewItemText] = useState("");
+  const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (cardData) {
-      setDescription(cardData.description || '');
-      setError(''); // Clear errors when modal opens
+      setDescription(cardData.description || "");
+      setDueDate(cardData.due_date ? new Date(cardData.due_date) : null);
+      setLabels(cardData.labels || []);
+      let loadedChecklist = [];
+      if (typeof cardData.checklist === "string") {
+        try {
+          loadedChecklist = JSON.parse(cardData.checklist);
+        } catch (e) {
+          loadedChecklist = [];
+        }
+      } else if (Array.isArray(cardData.checklist)) {
+        loadedChecklist = cardData.checklist;
+      }
+      setChecklist(loadedChecklist);
+      // --- End Checklist Logic ---
+
+      setError("");
+      setNewItemText("");
     }
   }, [cardData]);
 
   if (!isOpen || !cardData) return null;
 
-  const handleSave = async () => { /* ... (this function is unchanged) ... */ };
+  const handleSave = async () => {
+    try {
+      const response = await updateCard(cardData.id, {
+        description,
+        due_date: dueDate,
+        checklist,
+      });
+      // response.data is the card *without* labels.
+      // manually add our local 'labels' state back onto it.
+      const updatedCard = { ...response.data, labels: labels };
+
+      onCardUpdate(updatedCard); // Pass the fully merged object
+      onClose();
+    } catch (err) {
+      setError("Failed to save card data.");
+      console.error(err);
+    }
+  };
 
   // 4. Add handler for Delete
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this card?')) return;
+    if (!window.confirm("Are you sure you want to delete this card?")) return;
     try {
       await deleteCard(cardData.id);
       onCardDelete(cardData.id); // Pass ID back to BoardPage
       onClose();
     } catch (err) {
-      setError('Failed to delete card.');
+      setError("Failed to delete card.");
       console.error(err);
     }
   };
@@ -42,19 +107,117 @@ const CardNewboard = ({ isOpen, onClose, cardData, onCardUpdate, onCardDelete, o
       onCardDuplicate(response.data); // Pass new card object back to BoardPage
       onClose();
     } catch (err) {
-      setError('Failed to duplicate card.');
+      setError("Failed to duplicate card.");
       console.error(err);
     }
   };
 
-  const formattedDate = new Date(cardData.created_at).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  const handleToggleCheckItem = (itemId) => {
+    setChecklist((prevChecklist) =>
+      prevChecklist.map((item) =>
+        item.id === itemId ? { ...item, completed: !item.completed } : item
+      )
+    );
+  };
+  const handleAddItem = () => {
+    if (!newItemText.trim()) return; // Don't add empty items
+    const newItem = {
+      id: crypto.randomUUID(), // Create a temporary unique ID
+      text: newItemText.trim(),
+      completed: false,
+    };
+    setChecklist((prevChecklist) => [...prevChecklist, newItem]);
+    setNewItemText(""); // Clear the input
+  };
+
+  const handleDeleteItem = (itemId) => {
+    setChecklist((prevChecklist) =>
+      prevChecklist.filter((item) => item.id !== itemId)
+    );
+  };
+  const completedCount = checklist.filter((item) => item.completed).length;
+  const totalCount = checklist.length;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  const formattedDate = new Date(cardData.created_at).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
+
+  const handleToggleLabel = async (labelId) => {
+    const hasLabel = labels.includes(labelId); // Use local 'labels' state
+    let updatedLabels;
+
+    try {
+      if (hasLabel) {
+        await removeLabelFromCard(cardData.id, labelId);
+        updatedLabels = labels.filter((id) => id !== labelId);
+      } else {
+        await addLabelToCard(cardData.id, labelId);
+        updatedLabels = [...labels, labelId];
+      }
+
+      setLabels(updatedLabels); // Update local state
+      onCardUpdate({
+        ...cardData,
+        ...{ description, dueDate, checklist },
+        labels: updatedLabels,
+      }); // Also update BoardPage
+    } catch (err) {
+      console.error("Failed to toggle label", err);
+      setError("Failed to update label.");
+    }
+  };
+
+  const handleCreateLabel = async (newLabelData) => {
+    try {
+      // 1. Get the full response object
+      const response = await createLabel({
+        ...newLabelData,
+        board_id: boardId,
+      });
+
+      // 2. Get the actual label data
+      const newLabel = response.data;
+
+      onBoardUpdate(newLabel); // This is now correct
+      await handleToggleLabel(newLabel.id); // This now passes a valid ID
+      setIsLabelPopoverOpen(false);
+    } catch (err) {
+      console.error("Failed to create label", err);
+      setError("Failed to create label.");
+    }
+  };
+
+  // 4. Helper to get full label objects
+  const getFullLabels = () => {
+    if (!boardLabels || !cardData.labels) return [];
+    return cardData.labels
+      .map((labelId) => boardLabels.find((l) => l.id === labelId))
+      .filter(Boolean); // Filter out any undefined
+  };
+
+  const handleDeleteLabel = (labelId) => {
+    onLabelDelete(labelId);
+  };
 
   return (
     <Newboard isOpen={isOpen} onClose={onClose} title={cardData.title}>
+      <div className="flex flex-wrap gap-1 mb-4">
+        {getFullLabels().map((label) => (
+          <span
+            key={label.id}
+            className={`text-xs font-bold px-2 py-1 rounded-full ${label.color} text-white`}
+          >
+            {label.name}
+          </span>
+        ))}
+      </div>
       <div className="flex flex-col md:flex-row gap-6">
-        
         {/* Main Content (Left side) */}
         <div className="w-full md:w-2/3 space-y-4">
           {/* Description */}
@@ -65,9 +228,91 @@ const CardNewboard = ({ isOpen, onClose, cardData, onCardUpdate, onCardDelete, o
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 h-32 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              className="w-full p-2 h-30 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
               placeholder="Add a more detailed description..."
             />
+          </div>
+          {/* Due Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Due Date
+            </label>
+            <DatePicker
+              dateFormat="dd/MM/yyyy"
+              selected={dueDate}
+              onChange={(date) => setDueDate(date)}
+              isClearable
+              placeholderText="Set a due date..."
+              className="w-full px-2 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+            />
+          </div>
+          {/*CHECKLIST SECTION */}
+          <div className="space-y-2">
+            <label className="flex items-center text-sm font-medium text-gray-300">
+              <CheckCircleIcon className="w-5 h-5 mr-2" />
+              Checklist
+            </label>
+
+            {/* Progress Bar */}
+            {totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">
+                  {Math.round(progressPercent)}%
+                </span>
+                <div className="w-full bg-gray-600 rounded-full h-2">
+                  <div
+                    className="bg-violet-600 h-2 rounded-full transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Checklist Items */}
+            <div className="space-y-1 max-h-40 overflow-y-auto pr-2">
+              {checklist.map((item) => (
+                <div key={item.id} className="flex items-center group">
+                  <input
+                    type="checkbox"
+                    checked={item.completed}
+                    onChange={() => handleToggleCheckItem(item.id)}
+                    className="w-4 h-4 text-violet-600 bg-gray-700 border-gray-600 rounded focus:ring-violet-500"
+                  />
+                  <span
+                    className={`ml-2 text-sm flex-grow ${
+                      item.completed
+                        ? "line-through text-gray-500"
+                        : "text-gray-200"
+                    }`}
+                  >
+                    {item.text}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="ml-auto p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add New Item Input */}
+            <div className="flex items-center">
+              <input
+                type="text"
+                value={newItemText}
+                onChange={(e) => setNewItemText(e.target.value)}
+                placeholder="Add an item"
+                className="flex-grow p-1.5 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+              />
+              <button
+                onClick={handleAddItem}
+                className="ml-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-sm font-semibold rounded-md"
+              >
+                Add
+              </button>
+            </div>
           </div>
           {/* Timestamp */}
           <div className="flex items-center text-sm text-gray-400">
@@ -87,6 +332,24 @@ const CardNewboard = ({ isOpen, onClose, cardData, onCardUpdate, onCardDelete, o
         <div className="w-full md:w-1/3">
           <h4 className="text-sm font-medium text-gray-400 mb-2">Actions</h4>
           <div className="flex flex-col space-y-2">
+            <button
+              onClick={() => setIsLabelPopoverOpen((prev) => !prev)}
+              className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
+            >
+              <SparklesIcon className="w-5 h-5 mr-2" />
+              Labels
+            </button>
+            {isLabelPopoverOpen && (
+              <LabelPopover
+                boardLabels={boardLabels}
+                // 5. --- UPDATE THIS PROP ---
+                cardLabelIds={labels} // Use local 'labels' state, not cardData.labels
+                onToggleLabel={handleToggleLabel}
+                onCreateLabel={handleCreateLabel}
+                onDeleteLabel={onLabelDelete}
+                onClose={() => setIsLabelPopoverOpen(false)}
+              />
+            )}
             <button
               onClick={handleDuplicate}
               className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
@@ -109,4 +372,4 @@ const CardNewboard = ({ isOpen, onClose, cardData, onCardUpdate, onCardDelete, o
   );
 };
 
-export default CardNewboard;
+export default CardModal;

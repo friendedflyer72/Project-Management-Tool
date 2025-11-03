@@ -42,52 +42,68 @@ exports.createBoard = async (req, res) => {
   }
 };
 exports.getBoardById = async (req, res) => {
-  const { id } = req.params; // Board ID from URL
+  const { id : boardId } = req.params; // Board ID from URL
   const { id: userId } = req.user; // User ID from auth token
 
-  const hasAccess = await checkBoardAccess(userId, id);
-  if (!hasAccess) {
-    return res.status(404).json({ msg: 'Board not found or access denied' });
-  }
-
   try {
-    // This query joins boards, lists, and cards.
-    // We use LEFT JOIN in case a board has no lists, or a list has no cards.
-    const query = `
-SELECT
-        b.id AS board_id, b.name AS board_name,
-        l.id AS list_id, l.name AS list_name, l.position AS list_position,
-        c.id AS card_id, c.title AS card_title, 
-        c.description AS card_description,  -- ADD THIS
-        c.created_at AS card_created_at,  -- ADD THIS
-        c.position AS card_position
-      FROM boards b
-      LEFT JOIN lists l ON b.id = l.board_id
-      LEFT JOIN cards c ON l.id = c.list_id
-      WHERE b.id = $1
-      ORDER BY l.position, c.position;
-    `;
-
-    const { rows } = await db.query(query, [id]);
-
-    if (rows.length === 0) {
-      // This could mean the board doesn't exist OR the user doesn't own it
+    // --- PERMISSION CHECK ---
+    const hasAccess = await checkBoardAccess(userId, boardId);
+    if (!hasAccess) {
       return res.status(404).json({ msg: 'Board not found or access denied' });
     }
 
-    // --- Hydration Logic ---
-    // The query returns a flat array. We need to "hydrate" it into a nested object.
-    const board = {
-      id: rows[0].board_id,
-      name: rows[0].board_name,
-      lists: [],
-    };
+    // --- We will run 3 queries in parallel ---
 
-    // Use a Map to keep track of lists and avoid duplicates
+    // Query 1: Get lists and cards (as before)
+    const listCardQuery = `
+      SELECT
+        l.id AS list_id, l.name AS list_name, l.position AS list_position,
+        c.id AS card_id, c.title AS card_title, c.description AS card_description,
+        c.created_at AS card_created_at, c.due_date AS card_due_date, 
+        c.checklist AS card_checklist, c.position AS card_position
+      FROM lists l
+      LEFT JOIN cards c ON l.id = c.list_id
+      WHERE l.board_id = $1
+      ORDER BY l.position, c.position;
+    `;
+    const listCardPromise = db.query(listCardQuery, [boardId]);
+
+    // Query 2: Get all labels for this board
+    const labelQuery = "SELECT * FROM labels WHERE board_id = $1";
+    const labelPromise = db.query(labelQuery, [boardId]);
+
+    // Query 3: Get all card-label relationships for this board
+    const cardLabelQuery = `
+      SELECT cl.card_id, cl.label_id
+      FROM card_labels cl
+      JOIN cards c ON cl.card_id = c.id
+      JOIN lists l ON c.list_id = l.id
+      WHERE l.board_id = $1;
+    `;
+    const cardLabelPromise = db.query(cardLabelQuery, [boardId]);
+
+    // Query 4: Get board details (like name)
+    const boardPromise = db.query("SELECT * FROM boards WHERE id = $1", [boardId]);
+
+    // --- Wait for all queries to finish ---
+    const [listCardResult, labelResult, cardLabelResult, boardResult] =
+      await Promise.all([
+        listCardPromise,
+        labelPromise,
+        cardLabelPromise,
+        boardPromise,
+      ]);
+
+    // --- Start Hydration ---
+    const board = boardResult.rows[0];
+    board.lists = [];
+    board.labels = labelResult.rows; // Add all board labels to the response
+
     const listsMap = new Map();
+    const cardLabelLinks = cardLabelResult.rows;
 
-    rows.forEach(row => {
-      // If the list doesn't exist yet, create it
+    listCardResult.rows.forEach(row => {
+      // Create list if it doesn't exist
       if (row.list_id && !listsMap.has(row.list_id)) {
         listsMap.set(row.list_id, {
           id: row.list_id,
@@ -97,24 +113,35 @@ SELECT
         });
       }
 
-      // If there's a card in this row, add it to its list
+      // Add card to list
       if (row.card_id) {
         const list = listsMap.get(row.list_id);
-        if (list) { // Ensure list exists before pushing card
-          list.cards.push({
-            id: row.card_id,
-            title: row.card_title,
-            description: row.card_description,
-            createdAt: row.card_created_at,
-            position: row.card_position,
-          });
+        if (list) {
+          // Check if card is already added (to prevent duplicates from joins)
+          let card = list.cards.find(c => c.id === row.card_id);
+          if (!card) {
+            // Find all label IDs for this card
+            const labelsForThisCard = cardLabelLinks
+              .filter(link => link.card_id === row.card_id)
+              .map(link => link.label_id);
+
+            card = {
+              id: row.card_id,
+              title: row.card_title,
+              description: row.card_description,
+              created_at: row.card_created_at,
+              due_date: row.card_due_date,
+              checklist: row.card_checklist,
+              position: row.card_position,
+              labels: labelsForThisCard, // Add array of label IDs
+            };
+            list.cards.push(card);
+          }
         }
       }
     });
 
-    // Add the lists from the Map to the board object
     board.lists = Array.from(listsMap.values());
-
     res.json(board);
 
   } catch (err) {
@@ -174,16 +201,16 @@ exports.updateListOrder = async (req, res) => {
     for (let i = 0; i < listIds.length; i++) {
       const listId = listIds[i];
       const newPosition = i;
-      
+
       await client.query(
         "UPDATE lists SET position = $1 WHERE id = $2 AND board_id = $3",
         [newPosition, listId, boardId]
       );
     }
-    
+
     // 4. Commit transaction
     await client.query('COMMIT');
-    
+
     res.json({ msg: 'List order updated' });
 
   } catch (err) {

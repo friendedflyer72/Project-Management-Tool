@@ -29,7 +29,7 @@ exports.createCard = async (req, res) => {
 
     // 4. Insert the new card
     const newCard = await db.query(
-      "INSERT INTO cards (title, list_id, position) VALUES ($1, $2, $3) RETURNING id, title, position, list_id, description, created_at",
+      "INSERT INTO cards (title, list_id, position) VALUES ($1, $2, $3) RETURNING *",
       [title, list_id, nextPosition]
     );
 
@@ -42,11 +42,12 @@ exports.createCard = async (req, res) => {
 
 exports.updateCard = async (req, res) => {
   const { id } = req.params; // Card ID
-  const { description } = req.body;
+  // 1. Get 'checklist' from the request body
+  const { description, due_date, checklist } = req.body;
   const { id: userId } = req.user;
 
   try {
-    // 1. Get board_id from card_id to check permissions
+    // 2. Get board_id from card_id to check permissions
     const result = await db.query(
       `SELECT l.board_id FROM cards c
        JOIN lists l ON c.list_id = l.id
@@ -58,16 +59,16 @@ exports.updateCard = async (req, res) => {
     }
     const { board_id } = result.rows[0];
 
-    // 2. Check permissions
+    // 3. Check permissions
     const hasAccess = await checkBoardAccess(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
 
-    // 3. Update the card
+    // 4. Update the card with all new fields
     const updatedCard = await db.query(
-      "UPDATE cards SET description = $1 WHERE id = $2 RETURNING *",
-      [description, id]
+      "UPDATE cards SET description = $1, due_date = $2, checklist = $3 WHERE id = $4 RETURNING *",
+      [description, due_date || null, JSON.stringify(checklist), id] // Send checklist as JSON
     );
 
     res.json(updatedCard.rows[0]);
@@ -111,7 +112,8 @@ exports.deleteCard = async (req, res) => {
 };
 
 exports.duplicateCard = async (req, res) => {
-  const { id } = req.params; // Card ID to duplicate
+  const { id, } = req.params; // Card ID to duplicate
+  const { description, due_date, checklist } = req.body;
   const { id: userId } = req.user;
 
   try {
@@ -126,7 +128,7 @@ exports.duplicateCard = async (req, res) => {
     if (cardResult.rows.length === 0) {
       return res.status(404).json({ msg: 'Card not found' });
     }
-    
+
     const { title, description, list_id, board_id } = cardResult.rows[0];
 
     // 2. Check permissions
@@ -134,7 +136,7 @@ exports.duplicateCard = async (req, res) => {
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
-    
+
     const newTitle = `${title} (Copy)`;
 
     // 3. Find the next position in the list
@@ -146,7 +148,7 @@ exports.duplicateCard = async (req, res) => {
 
     // 4. Insert the new (duplicated) card
     const newCard = await db.query(
-      "INSERT INTO cards (title, description, list_id, position) VALUES ($1, $2, $3, $4) RETURNING *",
+      "INSERT INTO cards (title, description, list_id, position) VALUES ($1, $2, $3, $4) RETURNING id, title, position, list_id, description, created_at",
       [newTitle, description, list_id, nextPosition]
     );
 

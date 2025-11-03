@@ -6,9 +6,10 @@ import {
   createList,
   createCard,
   deleteList,
-  updateCard, // We need this for the modal
+  updateCard,
   updateCardOrder,
   updateListOrder,
+  deleteLabel,
 } from "../api/auth";
 
 // 1. Import dnd-kit components
@@ -257,7 +258,7 @@ const BoardPage = () => {
     }));
   };
 
-  // --- ADD THIS HANDLER ---
+  // --- Duplicate ---
   const handleCardDuplicated = (newCard) => {
     setBoard((prevBoard) => ({
       ...prevBoard,
@@ -268,6 +269,15 @@ const BoardPage = () => {
             { ...list, cards: [...list.cards, newCard] }
           : list
       ),
+    }));
+  };
+
+  // --- Label ---
+  const handleBoardUpdate = (newLabel) => {
+    // This adds a new label to the board's state
+    setBoard((prevBoard) => ({
+      ...prevBoard,
+      labels: [...prevBoard.labels, newLabel],
     }));
   };
   const handleDragEnd = (event) => {
@@ -437,7 +447,32 @@ const BoardPage = () => {
       </div>
     );
   }
+  const handleLabelDeleted = async (labelId) => {
+    try {
+      await deleteLabel(labelId);
 
+      // Update the board state to remove the label everywhere
+      setBoard((prevBoard) => {
+        // 1. Remove from the main labels list
+        const newLabels = prevBoard.labels.filter((l) => l.id !== labelId);
+
+        // 2. Remove from all cards
+        const newLists = prevBoard.lists.map((list) => ({
+          ...list,
+          cards: list.cards.map((card) => ({
+            ...card,
+            labels: card.labels.filter((id) => id !== labelId),
+          })),
+        }));
+
+        return { ...prevBoard, labels: newLabels, lists: newLists };
+      });
+    } catch (err) {
+      console.error("Failed to delete label:", err);
+      // You could show a toast.error() here
+      toast.error(err.response?.data?.msg || "Failed to delete label.");
+    }
+  };
   return (
     <div className="min-h-screen flex flex-col text-gray-200">
       <Navbar />
@@ -485,6 +520,8 @@ const BoardPage = () => {
                       key={card.id}
                       card={card}
                       onClick={() => setSelectedCard(card)}
+                      // 1. PASS ALL BOARD LABELS TO THE CARD
+                      boardLabels={board.labels}
                     />
                   ))}
                 </BoardList>
@@ -503,6 +540,10 @@ const BoardPage = () => {
         onCardUpdate={handleCardUpdate}
         onCardDelete={handleCardDeleted}
         onCardDuplicate={handleCardDuplicated}
+        boardLabels={board?.labels}
+        onBoardUpdate={handleBoardUpdate}
+        boardId={board?.id}
+        onLabelDelete={handleLabelDeleted}
       />
       <InviteModal
         isOpen={isInviteModalOpen}

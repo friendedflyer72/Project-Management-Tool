@@ -18,7 +18,7 @@ const Newboard = ({ isOpen, onClose, title, children }) => {
       {/* Modal Content */}
       <div
         onClick={handleModalContentClick}
-        className="relative w-full max-w-md p-6 bg-gray-800 rounded-lg shadow-xl"
+        className="relative w-full max-w-xl p-6 bg-gray-800 rounded-lg shadow-xl"
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-700">
