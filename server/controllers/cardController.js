@@ -68,7 +68,7 @@ exports.updateCard = async (req, res) => {
     // 4. Update the card with all new fields
     const updatedCard = await db.query(
       "UPDATE cards SET description = $1, due_date = $2, checklist = $3 WHERE id = $4 RETURNING *",
-      [description, due_date || null, JSON.stringify(checklist), id] // Send checklist as JSON
+      [description, due_date || null, JSON.stringify(checklist), id]
     );
 
     res.json(updatedCard.rows[0]);
@@ -112,24 +112,27 @@ exports.deleteCard = async (req, res) => {
 };
 
 exports.duplicateCard = async (req, res) => {
-  const { id, } = req.params; // Card ID to duplicate
-  const { description, due_date, checklist } = req.body;
+  const { id: originalCardId } = req.params; // Card ID to duplicate
   const { id: userId } = req.user;
 
+  const client = await db.pool.connect(); // Use a client for transaction
+
   try {
-    // 1. Get original card data
-    const cardResult = await db.query(
-      `SELECT c.title, c.description, c.list_id, l.board_id FROM cards c
+    // 1. Get original card data & verify ownership
+    // --- THIS IS THE FIX: Use client.query ---
+    const cardResult = await client.query(
+      `SELECT c.title, c.description, c.list_id, c.due_date, c.checklist, l.board_id 
+       FROM cards c
        JOIN lists l ON c.list_id = l.id
        WHERE c.id = $1`,
-      [id]
+      [originalCardId]
     );
 
     if (cardResult.rows.length === 0) {
       return res.status(404).json({ msg: 'Card not found' });
     }
 
-    const { title, description, list_id, board_id } = cardResult.rows[0];
+    const { title, description, list_id, due_date, checklist, board_id } = cardResult.rows[0];
 
     // 2. Check permissions
     const hasAccess = await checkBoardAccess(userId, board_id);
@@ -137,25 +140,70 @@ exports.duplicateCard = async (req, res) => {
       return res.status(403).json({ msg: 'Access denied' });
     }
 
-    const newTitle = `${title} (Copy)`;
+    // --- START TRANSACTION ---
+    await client.query('BEGIN');
 
     // 3. Find the next position in the list
-    const posResult = await db.query(
+    const posResult = await client.query(
       "SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM cards WHERE list_id = $1",
       [list_id]
     );
     const nextPosition = posResult.rows[0].next_pos;
+    const newTitle = `${title} (Copy)`;
 
-    // 4. Insert the new (duplicated) card
-    const newCard = await db.query(
-      "INSERT INTO cards (title, description, list_id, position) VALUES ($1, $2, $3, $4) RETURNING id, title, position, list_id, description, created_at",
-      [newTitle, description, list_id, nextPosition]
+    // 4. Handle checklist data (this is still important)
+    let checklistToInsert = [];
+    if (Array.isArray(checklist)) {
+      checklistToInsert = checklist;
+    } else if (typeof checklist === 'string') {
+      try {
+        const parsed = JSON.parse(checklist);
+        if (Array.isArray(parsed)) {
+          checklistToInsert = parsed;
+        }
+      } catch (e) { /* default to [] */ }
+    }
+
+    // 5. Insert the new (duplicated) card
+    const newCardResult = await client.query(
+      `INSERT INTO cards (title, description, list_id, position, due_date, checklist) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING *`,
+      // --- FIX IS HERE ---
+      // We must stringify the array, just like we do in updateCard
+      [newTitle, description, list_id, nextPosition, due_date, JSON.stringify(checklistToInsert)]
     );
 
-    res.status(201).json(newCard.rows[0]);
+    const newCard = newCardResult.rows[0];
+    const newCardId = newCard.id;
+
+    // 6. Get labels from the ORIGINAL card
+    const labelResult = await client.query(
+      "SELECT label_id FROM card_labels WHERE card_id = $1",
+      [originalCardId]
+    );
+
+    // 7. Insert those labels for the NEW card
+    if (labelResult.rows.length > 0) {
+      const labelValues = labelResult.rows.map(row => `(${newCardId}, ${row.label_id})`).join(',');
+      await client.query(
+        `INSERT INTO card_labels (card_id, label_id) VALUES ${labelValues}`
+      );
+    }
+
+    // --- COMMIT TRANSACTION ---
+    await client.query('COMMIT');
+
+    // 8. Add the (now copied) label IDs to the card object
+    newCard.labels = labelResult.rows.map(row => row.label_id);
+
+    res.status(201).json(newCard);
 
   } catch (err) {
+    await client.query('ROLLBACK'); // Roll back on any error
     console.error(err.message);
     res.status(500).send('Server Error');
+  } finally {
+    client.release(); // ALWAYS release the client
   }
 };
