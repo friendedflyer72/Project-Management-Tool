@@ -1,9 +1,11 @@
 // server/controllers/labelController.js
 const db = require('../db');
 const { checkBoardAccess } = require('../utils/authHelpers');
+const { getIO } = require('../socket');
 
 // --- Create a new label for a board ---
 exports.createLabel = async (req, res) => {
+  const io = getIO();
   const { name, color, board_id } = req.body;
   const { id: userId } = req.user;
 
@@ -18,6 +20,7 @@ exports.createLabel = async (req, res) => {
       [name, color, board_id]
     );
 
+    io.to(board_id).emit('label-created', newLabel.rows[0]);
     res.status(201).json(newLabel.rows[0]);
   } catch (err) {
     console.error(err.message);
@@ -27,6 +30,7 @@ exports.createLabel = async (req, res) => {
 
 // --- Add a label to a card ---
 exports.addLabelToCard = async (req, res) => {
+  const io = getIO();
   const { card_id, label_id } = req.body;
   const { id: userId } = req.user;
 
@@ -54,6 +58,7 @@ exports.addLabelToCard = async (req, res) => {
       [card_id, label_id]
     );
 
+    io.to(board_id).emit('label-added', { card_id, label_id });
     res.status(201).json({ msg: 'Label added' });
   } catch (err) {
     // Ignore "duplicate key" errors
@@ -67,6 +72,7 @@ exports.addLabelToCard = async (req, res) => {
 
 // --- Remove a label from a card ---
 exports.removeLabelFromCard = async (req, res) => {
+  const io = getIO();
   const { card_id, label_id } = req.body;
   const { id: userId } = req.user;
 
@@ -94,6 +100,7 @@ exports.removeLabelFromCard = async (req, res) => {
       [card_id, label_id]
     );
 
+    io.to(board_id).emit('label-removed', { card_id, label_id });
     res.json({ msg: 'Label removed' });
   } catch (err) {
     console.error(err.message);
@@ -102,6 +109,7 @@ exports.removeLabelFromCard = async (req, res) => {
 };
 
 exports.deleteLabel = async (req, res) => {
+  const io = getIO();
   const { id } = req.params; // Label ID to delete
   const { id: userId } = req.user;
 
@@ -128,6 +136,8 @@ exports.deleteLabel = async (req, res) => {
     // 3. Delete the label
     await db.query("DELETE FROM labels WHERE id = $1", [id]);
 
+    // 4. Emit update to the room (this now works)
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Label deleted' });
   } catch (err) {
     console.error(err.message);

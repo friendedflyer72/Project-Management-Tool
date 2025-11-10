@@ -3,11 +3,18 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+const { createServer } = require('http');
+const socket = require('./socket');
+
 const app = express();
+const httpServer = createServer(app);
+
+// 2. Initialize the socket server
+socket.init(httpServer); 
 
 // === MIDDLEWARE ===
-app.use(cors()); // Enable Cross-Origin Resource Sharing
-app.use(express.json()); // Allow server to accept JSON in request body
+app.use(cors());
+app.use(express.json());
 
 // === ROUTES ===
 app.use('/api/auth', require('./routes/auth'));
@@ -16,10 +23,6 @@ app.use('/api/lists', require('./routes/lists'));
 app.use('/api/cards', require('./routes/cards'));
 app.use('/api/labels', require('./routes/labels'));
 
-// Test route
-app.get('/', (req, res) => {
-  res.send('Trello Clone API is up and running!');
-});
-
+// === START SERVER ===
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
