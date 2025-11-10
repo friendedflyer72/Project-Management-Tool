@@ -1,8 +1,10 @@
 // server/controllers/cardController.js
 const db = require('../db');
+const { getIO } = require('../socket');
 const { checkBoardAccess } = require('../utils/authHelpers');
 
 exports.createCard = async (req, res) => {
+  const io = getIO();
   const { title, list_id } = req.body;
   const { id: userId } = req.user;
 
@@ -33,6 +35,7 @@ exports.createCard = async (req, res) => {
       [title, list_id, nextPosition]
     );
 
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.status(201).json(newCard.rows[0]);
   } catch (err) {
     console.error(err.message);
@@ -41,6 +44,7 @@ exports.createCard = async (req, res) => {
 };
 
 exports.updateCard = async (req, res) => {
+  const io = getIO();
   const { id } = req.params; // Card ID
   // 1. Get 'checklist' from the request body
   const { description, due_date, checklist } = req.body;
@@ -71,6 +75,7 @@ exports.updateCard = async (req, res) => {
       [description, due_date || null, JSON.stringify(checklist), id]
     );
 
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json(updatedCard.rows[0]);
   } catch (err) {
     console.error(err.message);
@@ -79,6 +84,7 @@ exports.updateCard = async (req, res) => {
 };
 
 exports.deleteCard = async (req, res) => {
+  const io = getIO();
   const { id } = req.params; // Card ID
   const { id: userId } = req.user;
 
@@ -104,6 +110,7 @@ exports.deleteCard = async (req, res) => {
     // 3. Delete the card
     await db.query("DELETE FROM cards WHERE id = $1", [id]);
 
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Card deleted' });
   } catch (err) {
     console.error(err.message);
@@ -112,6 +119,7 @@ exports.deleteCard = async (req, res) => {
 };
 
 exports.duplicateCard = async (req, res) => {
+  const io = getIO();
   const { id: originalCardId } = req.params; // Card ID to duplicate
   const { id: userId } = req.user;
 
@@ -195,6 +203,7 @@ exports.duplicateCard = async (req, res) => {
     await client.query('COMMIT');
 
     // 8. Add the (now copied) label IDs to the card object
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     newCard.labels = labelResult.rows.map(row => row.label_id);
 
     res.status(201).json(newCard);

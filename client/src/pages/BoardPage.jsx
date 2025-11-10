@@ -26,13 +26,14 @@ import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 // 2. Import our new components
 import BoardList from "../components/BoardList";
 import BoardCard from "../components/BoardCard";
-
+import io from 'socket.io-client';
 import Navbar from "../components/Navbar";
 import Aurora from "../components/Aurora";
 import AddList from "../components/AddList";
 import CardModal from "../components/CardModal";
 import InviteModal from "../components/InviteModal";
 
+const socket = io("http://localhost:5000");
 const BoardPage = () => {
   const { id } = useParams(); // Get the board ID from the URL
   const navigate = useNavigate();
@@ -51,29 +52,46 @@ const BoardPage = () => {
     useSensor(KeyboardSensor)
   );
 
-  useEffect(() => {
-    const fetchBoard = async () => {
-      try {
-        const response = await getBoardDetails(id);
-        setBoard(response.data);
-      } catch (err) {
-        console.error("Failed to fetch board:", err);
-        setError(
-          "Failed to fetch board. It may not exist or you may not have access."
-        );
-        // If auth error, redirect to login
-        if (
-          err.response &&
-          (err.response.status === 401 || err.response.status === 404)
-        ) {
-          localStorage.removeItem("token");
-          navigate("/login");
-        }
-      } finally {
-        setLoading(false);
+const fetchBoard = async () => {
+    try {
+      const response = await getBoardDetails(id);
+      setBoard(response.data);
+    } catch (err) {
+      console.error("Failed to fetch board:", err);
+      setError("Failed to fetch board. It may not exist or you may not have access.");
+      if (err.response && (err.response.status === 401 || err.response.status === 404)) {
+        localStorage.removeItem("token");
+        navigate("/login");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Use useEffect to manage the socket connection
+  useEffect(() => {
+    // A. Fetch the initial board data
     fetchBoard();
+
+    // B. Tell the server we want to join this board's room
+    socket.emit('joinBoard', id);
+
+    // C. Set up the listener for updates
+    // When we hear "BOARD_UPDATED", re-fetch the data
+    const handleBoardUpdate = () => {
+      console.log('Received board update from server!');
+      fetchBoard();
+    };
+    
+    socket.on('BOARD_UPDATED', handleBoardUpdate);
+
+    // D. Clean up when the component unmounts
+    return () => {
+      console.log('Leaving board room');
+      socket.emit('leaveBoard', id);
+      socket.off('BOARD_UPDATED', handleBoardUpdate); // Remove the listener
+    };
+    
   }, [id, navigate]);
   // --- NEW HANDLER for creating a list ---
   const handleAddList = async (listName) => {

@@ -1,7 +1,9 @@
 // server/controllers/listController.js
 const db = require('../db');
+const { getIO } = require('../socket');
 const { checkBoardAccess } = require('../utils/authHelpers');
 exports.createList = async (req, res) => {
+  const io = getIO();
   const { name, board_id } = req.body;
   const { id: userId } = req.user;
 
@@ -9,7 +11,7 @@ exports.createList = async (req, res) => {
   if (!hasAccess) {
     return res.status(403).json({ msg: 'Access denied' });
   }
-  
+
   try {
     // 1. Check if the user owns the board
     const boardCheck = await db.query(
@@ -37,6 +39,7 @@ exports.createList = async (req, res) => {
     const list = newList.rows[0];
     list.cards = [];
 
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.status(201).json(list);
     console.log("✅ List created successfully");
   } catch (err) {
@@ -46,15 +49,17 @@ exports.createList = async (req, res) => {
 };
 
 exports.updateCardOrder = async (req, res) => {
+  const io = getIO();
   const { id: listId } = req.params; // Get listId from URL
   const { cardIds } = req.body; // Get the array of card IDs from the body
   const { id: userId } = req.user;
+
 
   if (!cardIds || !Array.isArray(cardIds)) {
     return res.status(400).json({ msg: 'Invalid data' });
   }
 
-  const client = await db.pool.connect(); // Use a client for transaction
+  const client = await db.pool.connect();
 
   try {
     // 1. Check if user owns this list
@@ -68,6 +73,8 @@ exports.updateCardOrder = async (req, res) => {
     if (check.rows.length === 0) {
       return res.status(403).json({ msg: 'Access denied' });
     }
+    const boardResult = await client.query("SELECT board_id FROM lists WHERE id = $1", [listId]);
+    const { board_id } = boardResult.rows[0];
 
     // 2. Start transaction
     await client.query('BEGIN');
@@ -86,7 +93,8 @@ exports.updateCardOrder = async (req, res) => {
 
     // 4. Commit transaction
     await client.query('COMMIT');
-
+    // 5. Emit event
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Card order updated' });
 
   } catch (err) {
@@ -97,28 +105,36 @@ exports.updateCardOrder = async (req, res) => {
     client.release(); // Release client back to pool
   }
 };
+
 exports.deleteList = async (req, res) => {
-  const { id } = req.params; // List ID
-  const { id: userId } = req.user; // User ID
+  const { id } = req.params; // List ID to delete
+  const { id: userId } = req.user;
+  const io = getIO();
 
   try {
-    // 1. Check if user owns the board this list belongs to
-    const check = await db.query(
-      `SELECT b.owner_id FROM lists l
-       JOIN boards b ON l.board_id = b.id
-       WHERE l.id = $1 AND b.owner_id = $2`,
-      [id, userId]
+    // 1. Get the board_id from the list_id
+    const listResult = await db.query(
+      "SELECT board_id FROM lists WHERE id = $1",
+      [id]
     );
+    if (listResult.rows.length === 0) {
+      return res.status(404).json({ msg: 'List not found' });
+    }
+    const { board_id } = listResult.rows[0]; // <-- This defines board_id
 
-    if (check.rows.length === 0) {
-      return res.status(403).json({ msg: 'List not found or access denied' });
+    // 2. Check if user has access to this board
+    const hasAccess = await checkBoardAccess(userId, board_id);
+    if (!hasAccess) {
+      return res.status(403).json({ msg: 'Access denied' });
     }
 
-    // 2. Delete the list
+    // 3. Delete the list
     await db.query("DELETE FROM lists WHERE id = $1", [id]);
 
+    // 4. Emit update to the room (this now works)
+    io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'List deleted' });
-    console.log("✅ List deleted successfully");
+
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

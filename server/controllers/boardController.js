@@ -1,6 +1,8 @@
 // server/controllers/boardController.js
 const db = require('../db');
 const { checkBoardAccess } = require('../utils/authHelpers');
+const { getIO } = require('../socket');
+
 // Get all boards for the logged-in user
 exports.getUserBoards = async (req, res) => {
   try {
@@ -150,6 +152,7 @@ exports.getBoardById = async (req, res) => {
   }
 };
 exports.deleteBoard = async (req, res) => {
+  const io = getIO();
   const { id } = req.params; // Board ID
   const { id: userId } = req.user; // User ID
 
@@ -164,7 +167,8 @@ exports.deleteBoard = async (req, res) => {
       return res.status(403).json({ msg: 'Board not found or access denied' });
     }
 
-    res.json({ msg: 'Board deleted' });
+    res.json({ msg: 'Board deleted' }); 
+    io.to(id.toString()).emit('BOARD_DELETED');
     console.log("✅ Board deleted successfully");
   } catch (err) {
     console.error(err.message);
@@ -173,6 +177,7 @@ exports.deleteBoard = async (req, res) => {
 };
 
 exports.updateListOrder = async (req, res) => {
+  const io = getIO();
   const { id: boardId } = req.params; // Get boardId from URL
   const { listIds } = req.body; // Get the array of list IDs
   const { id: userId } = req.user;
@@ -210,7 +215,7 @@ exports.updateListOrder = async (req, res) => {
 
     // 4. Commit transaction
     await client.query('COMMIT');
-
+    io.to(boardId.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'List order updated' });
 
   } catch (err) {
