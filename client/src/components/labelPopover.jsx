@@ -20,6 +20,7 @@ const LabelPopover = ({
   onCreateLabel,
   onDeleteLabel,
   onClose,
+  userRole
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
@@ -27,6 +28,8 @@ const LabelPopover = ({
   const popoverRef = useRef(null);
 
   useClickOutside(popoverRef, onClose);
+  const isViewer = userRole === 'viewer';
+  const isOwner = userRole === 'owner';
   const handleCreate = () => {
     if (!newLabelName.trim()) return;
     onCreateLabel({ name: newLabelName, color: selectedColor });
@@ -52,11 +55,12 @@ const LabelPopover = ({
           return (
             <li
               key={label.id}
-              onClick={() => onToggleLabel(label.id)}
+              onClick={() => !isViewer && onToggleLabel(label.id)}
               className={`flex items-center justify-between p-2 rounded-md ${label.color} text-white font-medium text-sm cursor-pointer hover:opacity-80`}
             >
               <span>{label.name}</span>
               {isApplied && <CheckIcon className="w-4 h-4" />}
+              {!isOwner && (
               <button
                 onClick={(e) => handleDelete(e, label.id)}
                 className="p-0.5 rounded ml-2 text-white opacity-50 hover:opacity-100 hover:bg-gray-600 transition-all"
@@ -64,13 +68,15 @@ const LabelPopover = ({
               >
                 <XMarkIcon className="w-4 h-4" />
               </button>
+            )}
             </li>
           );
         })}
       </ul>
 
       <hr className="my-2 border-gray-600" />
-
+      {!isViewer && (
+      <>
       {isCreating ? (
         <div className="space-y-2">
           <input
@@ -112,6 +118,8 @@ const LabelPopover = ({
           <PlusIcon className="w-4 h-4 mr-1" />
           Create new label
         </button>
+      )}
+      </>
       )}
     </div>
   );

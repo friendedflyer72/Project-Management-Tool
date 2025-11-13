@@ -1,6 +1,6 @@
 // server/controllers/boardController.js
 const db = require('../db');
-const { checkBoardAccess } = require('../utils/authHelpers');
+const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
 const { getIO } = require('../socket');
 
 // Get all boards for the logged-in user
@@ -44,7 +44,7 @@ exports.createBoard = async (req, res) => {
   }
 };
 exports.getBoardById = async (req, res) => {
-  const { id : boardId } = req.params; // Board ID from URL
+  const { id: boardId } = req.params; // Board ID from URL
   const { id: userId } = req.user; // User ID from auth token
 
   try {
@@ -98,6 +98,23 @@ exports.getBoardById = async (req, res) => {
 
     // --- Start Hydration ---
     const board = boardResult.rows[0];
+if (Number(board.owner_id) === Number(userId)) {
+      board.userRole = 'owner';
+    } else {
+      // It's a member, find their role
+      const memberRole = await db.query(
+        "SELECT role FROM board_members WHERE user_id = $1 AND board_id = $2",
+        [userId, boardId]
+      );
+      console.log(memberRole.rows);
+      if (memberRole.rows[0] && memberRole.rows[0].role) {
+        board.userRole = memberRole.rows[0].role;
+      } else {
+        // This is a fallback, but shouldn't be hit if hasAccess passed.
+        board.userRole = 'viewer';
+      }
+    }
+
     board.lists = [];
     board.labels = labelResult.rows; // Add all board labels to the response
 
@@ -156,6 +173,11 @@ exports.deleteBoard = async (req, res) => {
   const { id } = req.params; // Board ID
   const { id: userId } = req.user; // User ID
 
+  const hasAccess = await checkBoardPermission(userId, id);
+  if (!hasAccess) {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
+
   try {
     // Check if the user owns the board before deleting
     const deleteResult = await db.query(
@@ -167,7 +189,7 @@ exports.deleteBoard = async (req, res) => {
       return res.status(403).json({ msg: 'Board not found or access denied' });
     }
 
-    res.json({ msg: 'Board deleted' }); 
+    res.json({ msg: 'Board deleted' });
     io.to(id.toString()).emit('BOARD_DELETED');
     console.log("✅ Board deleted successfully");
   } catch (err) {
@@ -187,6 +209,11 @@ exports.updateListOrder = async (req, res) => {
   }
 
   const client = await db.pool.connect(); // Use transaction
+
+  const hasAccess = await checkBoardPermission(userId, boardId);
+  if (!hasAccess) {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
 
   try {
     // 1. Check if user owns this board
@@ -228,8 +255,14 @@ exports.updateListOrder = async (req, res) => {
 };
 exports.inviteUser = async (req, res) => {
   const { id: boardId } = req.params;
-  const { email } = req.body;
+  const { email, role } = req.body;
   const { id: ownerId } = req.user;
+
+  // Validate role
+  const validRoles = ['editor', 'viewer'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ msg: 'Invalid role' });
+  }
 
   try {
     // 1. Check if the logged-in user is the *owner* (only owners can invite)
@@ -250,8 +283,8 @@ exports.inviteUser = async (req, res) => {
 
     // 3. Add the user to the board_members table
     await db.query(
-      "INSERT INTO board_members (user_id, board_id) VALUES ($1, $2)",
-      [inviteeId, boardId]
+      "INSERT INTO board_members (user_id, board_id, role) VALUES ($1, $2, $3)",
+      [inviteeId, boardId, role] // 4. Add 'role' to the query
     );
 
     res.status(201).json({ msg: 'User added to board.' });

@@ -1,6 +1,6 @@
 // server/controllers/labelController.js
 const db = require('../db');
-const { checkBoardAccess } = require('../utils/authHelpers');
+const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
 const { getIO } = require('../socket');
 
 // --- Create a new label for a board ---
@@ -10,7 +10,7 @@ exports.createLabel = async (req, res) => {
   const { id: userId } = req.user;
 
   try {
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -47,7 +47,7 @@ exports.addLabelToCard = async (req, res) => {
     }
     const { board_id } = result.rows[0];
 
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -89,7 +89,7 @@ exports.removeLabelFromCard = async (req, res) => {
     }
     const { board_id } = result.rows[0];
 
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -124,7 +124,13 @@ exports.deleteLabel = async (req, res) => {
     }
     const { board_id } = labelResult.rows[0];
 
-    // 2. Check if the user is the *owner* of that board
+    // 2. Check if user has access to this board
+    const hasAccess = await checkBoardPermission(userId, board_id);
+    if (!hasAccess) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    // 3. Check if the user is the *owner* of that board
     const boardResult = await db.query(
       "SELECT owner_id FROM boards WHERE id = $1 AND owner_id = $2",
       [board_id, userId]
@@ -133,10 +139,10 @@ exports.deleteLabel = async (req, res) => {
       return res.status(403).json({ msg: 'Only the board owner can delete labels.' });
     }
 
-    // 3. Delete the label
+    // 4. Delete the label
     await db.query("DELETE FROM labels WHERE id = $1", [id]);
 
-    // 4. Emit update to the room (this now works)
+    // 5. Emit update to the room (this now works)
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Label deleted' });
   } catch (err) {

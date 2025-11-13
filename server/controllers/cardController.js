@@ -1,7 +1,7 @@
 // server/controllers/cardController.js
 const db = require('../db');
 const { getIO } = require('../socket');
-const { checkBoardAccess } = require('../utils/authHelpers');
+const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
 
 exports.createCard = async (req, res) => {
   const io = getIO();
@@ -17,7 +17,7 @@ exports.createCard = async (req, res) => {
     const { board_id } = listResult.rows[0]; // Now we have the board_id
 
     // 2. Check if user has access to this board
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -64,7 +64,7 @@ exports.updateCard = async (req, res) => {
     const { board_id } = result.rows[0];
 
     // 3. Check permissions
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -102,7 +102,7 @@ exports.deleteCard = async (req, res) => {
     const { board_id } = result.rows[0];
 
     // 2. Check permissions
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -143,7 +143,7 @@ exports.duplicateCard = async (req, res) => {
     const { title, description, list_id, due_date, checklist, board_id } = cardResult.rows[0];
 
     // 2. Check permissions
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }

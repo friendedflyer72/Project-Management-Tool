@@ -26,7 +26,7 @@ import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 // 2. Import our new components
 import BoardList from "../components/BoardList";
 import BoardCard from "../components/BoardCard";
-import io from 'socket.io-client';
+import io from "socket.io-client";
 import Navbar from "../components/Navbar";
 import Aurora from "../components/Aurora";
 import AddList from "../components/AddList";
@@ -42,6 +42,7 @@ const BoardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [userRole, setUserRole] = useState("viewer");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -52,14 +53,20 @@ const BoardPage = () => {
     useSensor(KeyboardSensor)
   );
 
-const fetchBoard = async () => {
+  const fetchBoard = async () => {
     try {
       const response = await getBoardDetails(id);
       setBoard(response.data);
+      setUserRole(response.data.userRole);
     } catch (err) {
       console.error("Failed to fetch board:", err);
-      setError("Failed to fetch board. It may not exist or you may not have access.");
-      if (err.response && (err.response.status === 401 || err.response.status === 404)) {
+      setError(
+        "Failed to fetch board. It may not exist or you may not have access."
+      );
+      if (
+        err.response &&
+        (err.response.status === 401 || err.response.status === 404)
+      ) {
         localStorage.removeItem("token");
         navigate("/login");
       }
@@ -74,24 +81,23 @@ const fetchBoard = async () => {
     fetchBoard();
 
     // B. Tell the server we want to join this board's room
-    socket.emit('joinBoard', id);
+    socket.emit("joinBoard", id);
 
     // C. Set up the listener for updates
     // When we hear "BOARD_UPDATED", re-fetch the data
     const handleBoardUpdate = () => {
-      console.log('Received board update from server!');
+      console.log("Received board update from server!");
       fetchBoard();
     };
-    
-    socket.on('BOARD_UPDATED', handleBoardUpdate);
+
+    socket.on("BOARD_UPDATED", handleBoardUpdate);
 
     // D. Clean up when the component unmounts
     return () => {
-      console.log('Leaving board room');
-      socket.emit('leaveBoard', id);
-      socket.off('BOARD_UPDATED', handleBoardUpdate); // Remove the listener
+      console.log("Leaving board room");
+      socket.emit("leaveBoard", id);
+      socket.off("BOARD_UPDATED", handleBoardUpdate); // Remove the listener
     };
-    
   }, [id, navigate]);
   // --- NEW HANDLER for creating a list ---
   const handleAddList = async (listName) => {
@@ -465,6 +471,8 @@ const fetchBoard = async () => {
       </div>
     );
   }
+  const isViewer = userRole === "viewer only";
+
   const handleLabelDeleted = async (labelId) => {
     try {
       await deleteLabel(labelId);
@@ -504,13 +512,31 @@ const fetchBoard = async () => {
       </div>
       {/* Board Header */}
       <div className="container mx-auto p-4 sm:p-6">
-        <h1 className="text-3xl font-bold text-white mb-4">{board.name}</h1>
-        <button
-          onClick={() => setIsInviteModalOpen(true)}
-          className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
-        >
-          Invite
-        </button>
+        <div className="flex items-center gap-4 mb-4">
+          <h1 className="text-3xl font-bold text-white mb-4">{board.name}</h1>
+          {userRole && userRole !== "owner" && (
+            <span
+              className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                userRole === "owner"
+                  ? "bg-green-600 text-white"
+                  : userRole === "editor"
+                  ? "bg-violet-600 text-white"
+                  : "bg-gray-600 text-gray-200"
+              }`}
+            >
+              {/* Capitalize the first letter */}
+              {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+            </span>
+          )}
+        </div>
+        {userRole === 'owner' && (
+          <button
+            onClick={() => setIsInviteModalOpen(true)}
+            className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
+          >
+            Invite
+          </button>
+        )}
       </div>
 
       {/* Board Content (Lists) */}
@@ -519,6 +545,7 @@ const fetchBoard = async () => {
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        disabled={isViewer}
       >
         <div className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 pt-0">
           <div className="flex space-x-4 overflow-x-auto pb-4">
@@ -531,6 +558,7 @@ const fetchBoard = async () => {
                   cards={list.cards}
                   onDeleteList={handleDeleteList}
                   onCardCreated={(title) => handleAddCard(title, list.id)}
+                  isViewer={isViewer}
                 >
                   {/* We map the cards HERE and pass them as children */}
                   {list.cards.map((card) => (
@@ -545,8 +573,9 @@ const fetchBoard = async () => {
                 </BoardList>
               ))}
             </SortableContext>
-
-            <AddList boardId={id} onListCreated={handleAddList} />
+            {!isViewer && (
+              <AddList boardId={id} onListCreated={handleAddList} />
+            )}
           </div>
         </div>
       </DndContext>

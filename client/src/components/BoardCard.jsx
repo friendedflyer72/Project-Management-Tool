@@ -2,7 +2,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const BoardCard = ({ card, onClick, boardLabels }) => {
+const BoardCard = ({ card, onClick, boardLabels, isViewer }) => {
   const {
     attributes,
     listeners,
@@ -10,7 +10,7 @@ const BoardCard = ({ card, onClick, boardLabels }) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: card.id });
+  } = useSortable({ id: card.id, disabled: isViewer });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -32,7 +32,7 @@ const BoardCard = ({ card, onClick, boardLabels }) => {
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className={`w-full text-left bg-gray-700 p-3 rounded-md shadow-sm hover:bg-gray-600 transition-colors cursor-grab ${
+      className={`w-full text-left bg-gray-700 p-3 rounded-md shadow-sm hover:bg-gray-600 transition-colors ${isViewer ? 'cursor-pointer' : 'cursor-grab'} ${
         isDragging ? 'ring-2 ring-pink-500' : ''
       }`}
     >

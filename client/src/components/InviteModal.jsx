@@ -1,24 +1,25 @@
 // src/components/InviteNewboard.jsx
-import { useState } from 'react';
-import { inviteUserToBoard } from '../api/auth';
-import Newboard from './Newboard';
+import { useState } from "react";
+import { inviteUserToBoard } from "../api/auth";
+import Newboard from "./Newboard";
 
 const InviteNewboard = ({ isOpen, onClose, boardId }) => {
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("viewer");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     try {
-      await inviteUserToBoard(boardId, email);
-      setSuccess(`Successfully invited ${email}!`);
-      setEmail('');
+      await inviteUserToBoard(boardId, email, role);
+      setSuccess(`Successfully invited ${email} as a ${role}!`);
+      setEmail("");
     } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to send invite.');
+      setError(err.response?.data?.msg || "Failed to send invite.");
     }
   };
 
@@ -26,7 +27,10 @@ const InviteNewboard = ({ isOpen, onClose, boardId }) => {
     <Newboard isOpen={isOpen} onClose={onClose} title="Invite to Board">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
             User's Email
           </label>
           <input
@@ -38,6 +42,24 @@ const InviteNewboard = ({ isOpen, onClose, boardId }) => {
             placeholder="user@example.com"
             autoFocus
           />
+        </div>
+
+        <div>
+          <label
+            htmlFor="role"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
+            Role
+          </label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+          >
+            <option value="viewer">Viewer</option>
+            <option value="editor">Editor</option>
+          </select>
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}

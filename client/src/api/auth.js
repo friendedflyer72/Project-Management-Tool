@@ -30,7 +30,9 @@ export const createBoard = (boardData) => apiClient.post('/boards', boardData);
 export const getBoardDetails = (id) => apiClient.get(`/boards/${id}`);
 export const deleteBoard = (id) => apiClient.delete(`/boards/${id}`);
 export const updateListOrder = (boardId, listIds) => apiClient.put(`/boards/${boardId}/lists`, { listIds });
-export const inviteUserToBoard = (boardId, email) => apiClient.post(`/boards/${boardId}/invite`, { email });
+export const inviteUserToBoard = (boardId, email, role) => {
+  return apiClient.post(`/boards/${boardId}/invite`, { email, role });
+};
 
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);
@@ -43,10 +45,10 @@ export const updateCard = (id, cardData) => apiClient.put(`/cards/${id}`, cardDa
 export const deleteCard = (id) => apiClient.delete(`/cards/${id}`);
 export const duplicateCard = (id) => apiClient.post(`/cards/${id}/duplicate`);
 
-// --- Label Functions ---
+// --- Label Functions
 export const createLabel = (labelData) => apiClient.post('/labels', labelData);
 export const addLabelToCard = (cardId, labelId) => apiClient.post('/labels/add', { card_id: cardId, label_id: labelId });
-export const removeLabelFromCard = (cardId, labelId) => apiClient.delete('/labels/remove', { data: { card_id: cardId, label_id: labelId }});
+export const removeLabelFromCard = (cardId, labelId) => apiClient.delete('/labels/remove', { data: { card_id: cardId, label_id: labelId } });
 export const deleteLabel = (id) => apiClient.delete(`/labels/${id}`);
 
 // Profile functions

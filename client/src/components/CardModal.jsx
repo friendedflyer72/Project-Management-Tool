@@ -34,6 +34,7 @@ const CardModal = ({
   boardLabels,
   boardId,
   onLabelDelete,
+  userRole
 }) => {
   const [description, setDescription] = useState("");
   const [labels, setLabels] = useState([]);
@@ -42,6 +43,7 @@ const CardModal = ({
   const [checklist, setChecklist] = useState([]);
   const [newItemText, setNewItemText] = useState("");
   const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
+  const isViewer = userRole === "viewer";
 
   useEffect(() => {
     if (cardData) {
@@ -113,6 +115,7 @@ const CardModal = ({
   };
 
   const handleToggleCheckItem = (itemId) => {
+    if (isViewer) return;
     setChecklist((prevChecklist) =>
       prevChecklist.map((item) =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
@@ -120,6 +123,7 @@ const CardModal = ({
     );
   };
   const handleAddItem = () => {
+    if (isViewer) return;
     if (!newItemText.trim()) return; // Don't add empty items
     const newItem = {
       id: crypto.randomUUID(), // Create a temporary unique ID
@@ -131,6 +135,7 @@ const CardModal = ({
   };
 
   const handleDeleteItem = (itemId) => {
+    if (isViewer) return;
     setChecklist((prevChecklist) =>
       prevChecklist.filter((item) => item.id !== itemId)
     );
@@ -149,6 +154,7 @@ const CardModal = ({
   });
 
   const handleToggleLabel = async (labelId) => {
+    if (isViewer) return;
     const hasLabel = labels.includes(labelId); // Use local 'labels' state
     let updatedLabels;
 
@@ -228,8 +234,14 @@ const CardModal = ({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 h-30 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
-              placeholder="Add a more detailed description..."
+              disabled={isViewer} // 5. Disable input
+              readOnly={isViewer} // for good measure
+              className="w-full p-2 h-32 ... disabled:opacity-70 disabled:cursor-not-allowed"
+              placeholder={
+                isViewer
+                  ? "No description provided."
+                  : "Add a more detailed description..."
+              }
             />
           </div>
           {/* Due Date */}
@@ -242,8 +254,11 @@ const CardModal = ({
               selected={dueDate}
               onChange={(date) => setDueDate(date)}
               isClearable
-              placeholderText="Set a due date..."
-              className="w-full px-2 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              disabled={isViewer}
+              placeholderText={
+                isViewer ? "No due date set." : "Set a due date..."
+              }
+              className="w-full px-2 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-70 disabled:cursor-not-allowed"
             />
           </div>
           {/*CHECKLIST SECTION */}
@@ -276,7 +291,8 @@ const CardModal = ({
                     type="checkbox"
                     checked={item.completed}
                     onChange={() => handleToggleCheckItem(item.id)}
-                    className="w-4 h-4 text-violet-600 bg-gray-700 border-gray-600 rounded focus:ring-violet-500"
+                    disabled={isViewer}
+                    className="w-4 h-4 text-violet-600 bg-gray-700 border-gray-600 rounded focus:ring-violet-500 disabled:cursor-not-allowed"
                   />
                   <span
                     className={`ml-2 text-sm flex-grow ${
@@ -287,17 +303,20 @@ const CardModal = ({
                   >
                     {item.text}
                   </span>
+                  {!isViewer && (
                   <button
                     onClick={() => handleDeleteItem(item.id)}
                     className="ml-auto p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <XMarkIcon className="w-4 h-4" />
                   </button>
+                  )}
                 </div>
               ))}
             </div>
 
             {/* Add New Item Input */}
+            {!isViewer && (
             <div className="flex items-center">
               <input
                 type="text"
@@ -313,6 +332,7 @@ const CardModal = ({
                 Add
               </button>
             </div>
+            )}
           </div>
           {/* Timestamp */}
           <div className="flex items-center text-sm text-gray-400">
@@ -320,15 +340,18 @@ const CardModal = ({
             <span>Created: {formattedDate}</span>
           </div>
           {/* Save Button */}
+          {!isViewer && (
           <button
             onClick={handleSave}
             className="w-full py-2 px-4 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700 transition duration-300"
           >
             Save
           </button>
+          )}
         </div>
 
         {/* Actions (Right side) */}
+        {!isViewer && (
         <div className="w-full md:w-1/3">
           <h4 className="text-sm font-medium text-gray-400 mb-2">Actions</h4>
           <div className="flex flex-col space-y-2">
@@ -348,6 +371,7 @@ const CardModal = ({
                 onCreateLabel={handleCreateLabel}
                 onDeleteLabel={onLabelDelete}
                 onClose={() => setIsLabelPopoverOpen(false)}
+                userRole={userRole}
               />
             )}
             <button
@@ -366,6 +390,7 @@ const CardModal = ({
             </button>
           </div>
         </div>
+        )}
       </div>
       {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
     </Newboard>

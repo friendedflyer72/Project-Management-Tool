@@ -1,13 +1,13 @@
 // server/controllers/listController.js
 const db = require('../db');
 const { getIO } = require('../socket');
-const { checkBoardAccess } = require('../utils/authHelpers');
+const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
 exports.createList = async (req, res) => {
   const io = getIO();
   const { name, board_id } = req.body;
   const { id: userId } = req.user;
 
-  const hasAccess = await checkBoardAccess(userId, board_id);
+  const hasAccess = await checkBoardPermission(userId, board_id);
   if (!hasAccess) {
     return res.status(403).json({ msg: 'Access denied' });
   }
@@ -59,6 +59,10 @@ exports.updateCardOrder = async (req, res) => {
     return res.status(400).json({ msg: 'Invalid data' });
   }
 
+  const hasAccess = await checkBoardPermission(userId, listId);
+  if (!hasAccess) {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
   const client = await db.pool.connect();
 
   try {
@@ -123,7 +127,7 @@ exports.deleteList = async (req, res) => {
     const { board_id } = listResult.rows[0]; // <-- This defines board_id
 
     // 2. Check if user has access to this board
-    const hasAccess = await checkBoardAccess(userId, board_id);
+    const hasAccess = await checkBoardPermission(userId, board_id);
     if (!hasAccess) {
       return res.status(403).json({ msg: 'Access denied' });
     }
