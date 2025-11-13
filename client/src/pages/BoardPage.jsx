@@ -58,6 +58,8 @@ const BoardPage = () => {
       const response = await getBoardDetails(id);
       setBoard(response.data);
       setUserRole(response.data.userRole);
+      // --- DEBUG LOG 1: What is the API sending? ---
+      console.log("FROM API:", response.data);
     } catch (err) {
       console.error("Failed to fetch board:", err);
       setError(
@@ -499,6 +501,7 @@ const BoardPage = () => {
       toast.error(err.response?.data?.msg || "Failed to delete label.");
     }
   };
+  console.log("RENDERING with userRole:", userRole);
   return (
     <div className="min-h-screen flex flex-col text-gray-200">
       <Navbar />
@@ -514,7 +517,7 @@ const BoardPage = () => {
       <div className="container mx-auto p-4 sm:p-6">
         <div className="flex items-center gap-4 mb-4">
           <h1 className="text-3xl font-bold text-white mb-4">{board.name}</h1>
-          {userRole && userRole !== "owner" && (
+          {userRole && (
             <span
               className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                 userRole === "owner"
@@ -524,12 +527,11 @@ const BoardPage = () => {
                   : "bg-gray-600 text-gray-200"
               }`}
             >
-              {/* Capitalize the first letter */}
               {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
             </span>
           )}
         </div>
-        {userRole === 'owner' && (
+        {userRole === "owner" && (
           <button
             onClick={() => setIsInviteModalOpen(true)}
             className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"

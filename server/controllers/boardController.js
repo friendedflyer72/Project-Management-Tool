@@ -46,7 +46,7 @@ exports.createBoard = async (req, res) => {
 exports.getBoardById = async (req, res) => {
   const { id: boardId } = req.params; // Board ID from URL
   const { id: userId } = req.user; // User ID from auth token
-
+  console.log(`--- DEBUG: Checking access for userId: ${userId} (Type: ${typeof userId})`);
   try {
     // --- PERMISSION CHECK ---
     const hasAccess = await checkBoardAccess(userId, boardId);
@@ -98,7 +98,16 @@ exports.getBoardById = async (req, res) => {
 
     // --- Start Hydration ---
     const board = boardResult.rows[0];
-if (Number(board.owner_id) === Number(userId)) {
+    // --- DEBUGGING LOG  ---
+    console.log(`--- DEBUG: Fetched board.owner_id: ${board.owner_id} (Type: ${typeof board.owner_id})`);
+
+    // --- NEW LOGIC: Find and attach the user's role ---
+    const isOwner = Number(board.owner_id) === Number(userId);
+
+    // --- DEBUGGING LOG  ---
+    console.log(`--- DEBUG: Is owner? (Number(${board.owner_id}) === Number(${userId})): ${isOwner}`);
+
+    if (isOwner) {
       board.userRole = 'owner';
     } else {
       // It's a member, find their role
@@ -106,14 +115,16 @@ if (Number(board.owner_id) === Number(userId)) {
         "SELECT role FROM board_members WHERE user_id = $1 AND board_id = $2",
         [userId, boardId]
       );
-      console.log(memberRole.rows);
+
       if (memberRole.rows[0] && memberRole.rows[0].role) {
         board.userRole = memberRole.rows[0].role;
       } else {
-        // This is a fallback, but shouldn't be hit if hasAccess passed.
         board.userRole = 'viewer';
       }
     }
+
+    // --- DEBUGGING LOG 4 ---
+    console.log(`--- DEBUG: Final role set to: ${board.userRole}`);
 
     board.lists = [];
     board.labels = labelResult.rows; // Add all board labels to the response
