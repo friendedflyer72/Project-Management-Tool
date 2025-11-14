@@ -22,6 +22,7 @@ import {
   closestCorners,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove } from "@dnd-kit/sortable";
+import { ListBulletIcon } from "@heroicons/react/24/outline";
 
 // 2. Import our new components
 import BoardList from "../components/BoardList";
@@ -32,6 +33,8 @@ import Aurora from "../components/Aurora";
 import AddList from "../components/AddList";
 import CardModal from "../components/CardModal";
 import InviteModal from "../components/InviteModal";
+import BoardMembers from "../components/BoardMembers";
+import ActivityModal from "../components/ActivityModal";
 
 const socket = io("http://localhost:5000");
 const BoardPage = () => {
@@ -43,6 +46,7 @@ const BoardPage = () => {
   const [error, setError] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [userRole, setUserRole] = useState("viewer");
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -58,8 +62,6 @@ const BoardPage = () => {
       const response = await getBoardDetails(id);
       setBoard(response.data);
       setUserRole(response.data.userRole);
-      // --- DEBUG LOG 1: What is the API sending? ---
-      console.log("FROM API:", response.data);
     } catch (err) {
       console.error("Failed to fetch board:", err);
       setError(
@@ -473,7 +475,7 @@ const BoardPage = () => {
       </div>
     );
   }
-  const isViewer = userRole === "viewer only";
+  const isViewer = userRole === "viewer";
 
   const handleLabelDeleted = async (labelId) => {
     try {
@@ -531,16 +533,26 @@ const BoardPage = () => {
             </span>
           )}
         </div>
-        {userRole === "owner" && (
+        <div className="flex items-center gap-4">
+          {/*  Render the new component */}
+          <BoardMembers members={board.members} />
           <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
+            onClick={() => setIsActivityModalOpen(true)}
+            className="flex items-center gap-1 py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
           >
-            Invite
+            <ListBulletIcon className="w-4 h-4" />
+            Activity
           </button>
-        )}
+          {userRole === "owner" && (
+            <button
+              onClick={() => setIsInviteModalOpen(true)}
+              className="py-1 px-3 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-600 transition"
+            >
+              Invite
+            </button>
+          )}
+        </div>
       </div>
-
       {/* Board Content (Lists) */}
       <DndContext
         sensors={sensors}
@@ -597,6 +609,11 @@ const BoardPage = () => {
       <InviteModal
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
+        boardId={id}
+      />
+      <ActivityModal
+        isOpen={isActivityModalOpen}
+        onClose={() => setIsActivityModalOpen(false)}
         boardId={id}
       />
     </div>

@@ -33,6 +33,7 @@ export const updateListOrder = (boardId, listIds) => apiClient.put(`/boards/${bo
 export const inviteUserToBoard = (boardId, email, role) => {
   return apiClient.post(`/boards/${boardId}/invite`, { email, role });
 };
+export const getBoardActivity = (boardId) => apiClient.get(`/boards/${boardId}/activity`);
 
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);

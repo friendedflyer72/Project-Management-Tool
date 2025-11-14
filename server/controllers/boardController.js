@@ -46,7 +46,7 @@ exports.createBoard = async (req, res) => {
 exports.getBoardById = async (req, res) => {
   const { id: boardId } = req.params; // Board ID from URL
   const { id: userId } = req.user; // User ID from auth token
-  console.log(`--- DEBUG: Checking access for userId: ${userId} (Type: ${typeof userId})`);
+
   try {
     // --- PERMISSION CHECK ---
     const hasAccess = await checkBoardAccess(userId, boardId);
@@ -87,25 +87,28 @@ exports.getBoardById = async (req, res) => {
     // Query 4: Get board details (like name)
     const boardPromise = db.query("SELECT * FROM boards WHERE id = $1", [boardId]);
 
+    // Query 5: Get board members
+    const memberQuery = `
+      (SELECT id, username, 'owner' as role FROM users WHERE id = (SELECT owner_id FROM boards WHERE id = $1))
+      UNION
+      (SELECT u.id, u.username, bm.role FROM users u JOIN board_members bm ON u.id = bm.user_id WHERE bm.board_id = $1)
+    `;
+    const memberPromise = db.query(memberQuery, [boardId]);
     // --- Wait for all queries to finish ---
-    const [listCardResult, labelResult, cardLabelResult, boardResult] =
+    const [listCardResult, labelResult, cardLabelResult, boardResult, memberResult] =
       await Promise.all([
         listCardPromise,
         labelPromise,
         cardLabelPromise,
         boardPromise,
+        memberPromise
       ]);
 
     // --- Start Hydration ---
     const board = boardResult.rows[0];
-    // --- DEBUGGING LOG  ---
-    console.log(`--- DEBUG: Fetched board.owner_id: ${board.owner_id} (Type: ${typeof board.owner_id})`);
 
     // --- NEW LOGIC: Find and attach the user's role ---
     const isOwner = Number(board.owner_id) === Number(userId);
-
-    // --- DEBUGGING LOG  ---
-    console.log(`--- DEBUG: Is owner? (Number(${board.owner_id}) === Number(${userId})): ${isOwner}`);
 
     if (isOwner) {
       board.userRole = 'owner';
@@ -123,11 +126,9 @@ exports.getBoardById = async (req, res) => {
       }
     }
 
-    // --- DEBUGGING LOG 4 ---
-    console.log(`--- DEBUG: Final role set to: ${board.userRole}`);
-
     board.lists = [];
     board.labels = labelResult.rows; // Add all board labels to the response
+    board.members = memberResult.rows; // Add all board members to the response
 
     const listsMap = new Map();
     const cardLabelLinks = cardLabelResult.rows;
@@ -304,6 +305,33 @@ exports.inviteUser = async (req, res) => {
     if (err.code === '23505') {
       return res.status(400).json({ msg: 'User is already a member of this board.' });
     }
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
+exports.getBoardActivity = async (req, res) => {
+  const { id: boardId } = req.params;
+  const { id: userId } = req.user;
+
+  try {
+    const hasAccess = await checkBoardAccess(userId, boardId);
+    if (!hasAccess) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    const query = `
+      SELECT a.description, a.created_at, u.username
+      FROM activity_logs a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.board_id = $1
+      ORDER BY a.created_at DESC
+      LIMIT 30;
+    `;
+    const { rows } = await db.query(query, [boardId]);
+    res.json(rows);
+    
+  } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }

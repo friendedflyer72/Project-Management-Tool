@@ -2,6 +2,7 @@
 const db = require('../db');
 const { getIO } = require('../socket');
 const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
+const { logActivity } = require('../utils/logActivity');
 
 exports.createCard = async (req, res) => {
   const io = getIO();
@@ -35,6 +36,7 @@ exports.createCard = async (req, res) => {
       [title, list_id, nextPosition]
     );
 
+    logActivity(userId, board_id, `Created card: ${title}`);
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.status(201).json(newCard.rows[0]);
   } catch (err) {
@@ -75,6 +77,7 @@ exports.updateCard = async (req, res) => {
       [description, due_date || null, JSON.stringify(checklist), id]
     );
 
+    logActivity(userId, board_id, `Updated card: ${updatedCard.rows[0].title}`);
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json(updatedCard.rows[0]);
   } catch (err) {
@@ -110,6 +113,7 @@ exports.deleteCard = async (req, res) => {
     // 3. Delete the card
     await db.query("DELETE FROM cards WHERE id = $1", [id]);
 
+    logActivity(userId, board_id, 'Deleted card');
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Card deleted' });
   } catch (err) {
@@ -203,6 +207,7 @@ exports.duplicateCard = async (req, res) => {
     await client.query('COMMIT');
 
     // 8. Add the (now copied) label IDs to the card object
+    logActivity(userId, board_id, 'Duplicated card');
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     newCard.labels = labelResult.rows.map(row => row.label_id);
 

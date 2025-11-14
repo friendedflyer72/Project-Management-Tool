@@ -2,6 +2,7 @@
 const db = require('../db');
 const { getIO } = require('../socket');
 const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
+const { logActivity } = require('../utils/logActivity');
 exports.createList = async (req, res) => {
   const io = getIO();
   const { name, board_id } = req.body;
@@ -39,6 +40,7 @@ exports.createList = async (req, res) => {
     const list = newList.rows[0];
     list.cards = [];
 
+    logActivity(board_id, userId, `created list "${list.name}"`);
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.status(201).json(list);
     console.log("✅ List created successfully");
@@ -98,6 +100,7 @@ exports.updateCardOrder = async (req, res) => {
     // 4. Commit transaction
     await client.query('COMMIT');
     // 5. Emit event
+    logActivity(board_id, userId, 'updated card order');
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Card order updated' });
 
@@ -136,6 +139,7 @@ exports.deleteList = async (req, res) => {
     await db.query("DELETE FROM lists WHERE id = $1", [id]);
 
     // 4. Emit update to the room (this now works)
+    logActivity(board_id, userId, 'deleted list');
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'List deleted' });
 

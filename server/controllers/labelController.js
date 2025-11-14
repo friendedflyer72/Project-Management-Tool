@@ -2,6 +2,7 @@
 const db = require('../db');
 const { checkBoardAccess, checkBoardPermission } = require('../utils/authHelpers');
 const { getIO } = require('../socket');
+const { logActivity } = require('../utils/logActivity');
 
 // --- Create a new label for a board ---
 exports.createLabel = async (req, res) => {
@@ -20,6 +21,7 @@ exports.createLabel = async (req, res) => {
       [name, color, board_id]
     );
 
+    logActivity(userId, board_id, `Created label: ${name}`);
     io.to(board_id).emit('label-created', newLabel.rows[0]);
     res.status(201).json(newLabel.rows[0]);
   } catch (err) {
@@ -58,6 +60,7 @@ exports.addLabelToCard = async (req, res) => {
       [card_id, label_id]
     );
 
+    logActivity(userId, board_id, `Added label to card: ${label_id}`);
     io.to(board_id).emit('label-added', { card_id, label_id });
     res.status(201).json({ msg: 'Label added' });
   } catch (err) {
@@ -100,6 +103,7 @@ exports.removeLabelFromCard = async (req, res) => {
       [card_id, label_id]
     );
 
+    logActivity(userId, board_id, `Removed label from card: ${label_id}`);
     io.to(board_id).emit('label-removed', { card_id, label_id });
     res.json({ msg: 'Label removed' });
   } catch (err) {
@@ -143,6 +147,7 @@ exports.deleteLabel = async (req, res) => {
     await db.query("DELETE FROM labels WHERE id = $1", [id]);
 
     // 5. Emit update to the room (this now works)
+    logActivity(board_id, userId, 'deleted label');
     io.to(board_id.toString()).emit('BOARD_UPDATED');
     res.json({ msg: 'Label deleted' });
   } catch (err) {
