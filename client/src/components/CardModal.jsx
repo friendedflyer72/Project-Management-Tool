@@ -8,18 +8,24 @@ import {
   addLabelToCard,
   removeLabelFromCard,
   deleteLabel,
+  assignUserToCard,
+  removeUserFromCard,
 } from "../api/auth";
 import Newboard from "./Newboard";
 import DatePicker from "react-datepicker";
 import LabelPopover from "./labelPopover";
+import AssigneePopover from "./AssigneePopover";
+import BoardMembers from "../components/BoardMembers";
 import {
-  ClockIcon,
   TrashIcon,
   DocumentDuplicateIcon,
   CheckCircleIcon,
   PlusIcon,
   XMarkIcon,
   SparklesIcon,
+  ClockIcon,
+  CalendarDaysIcon,
+  UserPlusIcon,
 } from "@heroicons/react/24/outline";
 
 // Accept new props for delete/duplicate handlers
@@ -34,7 +40,8 @@ const CardModal = ({
   boardLabels,
   boardId,
   onLabelDelete,
-  userRole
+  userRole,
+  boardMembers,
 }) => {
   const [description, setDescription] = useState("");
   const [labels, setLabels] = useState([]);
@@ -44,12 +51,15 @@ const CardModal = ({
   const [newItemText, setNewItemText] = useState("");
   const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
   const isViewer = userRole === "viewer";
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [assignees, setAssignees] = useState([]);
 
   useEffect(() => {
     if (cardData) {
       setDescription(cardData.description || "");
       setDueDate(cardData.due_date ? new Date(cardData.due_date) : null);
       setLabels(cardData.labels || []);
+      setAssignees(cardData.assignees || []);
       let loadedChecklist = [];
       if (typeof cardData.checklist === "string") {
         try {
@@ -211,6 +221,47 @@ const CardModal = ({
     onLabelDelete(labelId);
   };
 
+  const formattedUpdateDate = cardData.updated_at
+    ? new Date(cardData.updated_at).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  // --- ADD ASSIGNEE HANDLER ---
+  const handleToggleAssignee = async (userId) => {
+    if (isViewer) return;
+    const hasAssignee = assignees.includes(userId);
+    let updatedAssignees;
+
+    try {
+      if (hasAssignee) {
+        await removeUserFromCard(cardData.id, userId);
+        updatedAssignees = assignees.filter((id) => id !== userId);
+      } else {
+        await assignUserToCard(cardData.id, userId);
+        updatedAssignees = [...assignees, userId];
+      }
+      setAssignees(updatedAssignees);
+      // Update BoardPage
+      onCardUpdate({
+        ...cardData,
+        ...{ description, dueDate, checklist, labels },
+        assignees: updatedAssignees,
+      });
+    } catch (err) {
+      console.error("Failed to toggle assignee", err);
+      setError("Failed to update assignee.");
+    }
+  };
+
+  // Helper to get full member objects for assigned users
+  const getFullAssignees = () => {
+    if (!boardMembers || !assignees) return [];
+    return boardMembers.filter((member) => assignees.includes(member.id));
+  };
   return (
     <Newboard isOpen={isOpen} onClose={onClose} title={cardData.title}>
       <div className="flex flex-wrap gap-1 mb-4">
@@ -222,6 +273,10 @@ const CardModal = ({
             {label.name}
           </span>
         ))}
+      </div>
+      <div className="mb-4">
+        <h4 className="text-sm font-medium text-gray-300 mb-2">Assignees</h4>
+        <BoardMembers members={getFullAssignees()} />
       </div>
       <div className="flex flex-col md:flex-row gap-6">
         {/* Main Content (Left side) */}
@@ -304,12 +359,12 @@ const CardModal = ({
                     {item.text}
                   </span>
                   {!isViewer && (
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="ml-auto p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <XMarkIcon className="w-4 h-4" />
-                  </button>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="ml-auto p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
               ))}
@@ -317,21 +372,21 @@ const CardModal = ({
 
             {/* Add New Item Input */}
             {!isViewer && (
-            <div className="flex items-center">
-              <input
-                type="text"
-                value={newItemText}
-                onChange={(e) => setNewItemText(e.target.value)}
-                placeholder="Add an item"
-                className="flex-grow p-1.5 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
-              />
-              <button
-                onClick={handleAddItem}
-                className="ml-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-sm font-semibold rounded-md"
-              >
-                Add
-              </button>
-            </div>
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={newItemText}
+                  onChange={(e) => setNewItemText(e.target.value)}
+                  placeholder="Add an item"
+                  className="flex-grow p-1.5 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                />
+                <button
+                  onClick={handleAddItem}
+                  className="ml-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-sm font-semibold rounded-md"
+                >
+                  Add
+                </button>
+              </div>
             )}
           </div>
           {/* Timestamp */}
@@ -339,57 +394,81 @@ const CardModal = ({
             <ClockIcon className="w-5 h-5 mr-2" />
             <span>Created: {formattedDate}</span>
           </div>
+          {formattedUpdateDate && (
+            <div className="flex items-center">
+              <CalendarDaysIcon className="w-5 h-5 mr-2" />
+              <span>
+                Updated: {formattedUpdateDate} by{" "}
+                {cardData.updated_by_username || "Unknown"}
+              </span>
+            </div>
+          )}
           {/* Save Button */}
           {!isViewer && (
-          <button
-            onClick={handleSave}
-            className="w-full py-2 px-4 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700 transition duration-300"
-          >
-            Save
-          </button>
+            <button
+              onClick={handleSave}
+              className="w-full py-2 px-4 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700 transition duration-300"
+            >
+              Save
+            </button>
           )}
         </div>
 
         {/* Actions (Right side) */}
         {!isViewer && (
-        <div className="w-full md:w-1/3">
-          <h4 className="text-sm font-medium text-gray-400 mb-2">Actions</h4>
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => setIsLabelPopoverOpen((prev) => !prev)}
-              className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
-            >
-              <SparklesIcon className="w-5 h-5 mr-2" />
-              Labels
-            </button>
-            {isLabelPopoverOpen && (
-              <LabelPopover
-                boardLabels={boardLabels}
-                // 5. --- UPDATE THIS PROP ---
-                cardLabelIds={labels} // Use local 'labels' state, not cardData.labels
-                onToggleLabel={handleToggleLabel}
-                onCreateLabel={handleCreateLabel}
-                onDeleteLabel={onLabelDelete}
-                onClose={() => setIsLabelPopoverOpen(false)}
-                userRole={userRole}
-              />
-            )}
-            <button
-              onClick={handleDuplicate}
-              className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
-            >
-              <DocumentDuplicateIcon className="w-5 h-5 mr-2" />
-              Duplicate
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center w-full p-2 bg-gray-700 hover:bg-red-800 text-gray-200 hover:text-white rounded-md transition"
-            >
-              <TrashIcon className="w-5 h-5 mr-2" />
-              Delete
-            </button>
+          <div className="w-full md:w-1/3">
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Actions</h4>
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={() => setIsAssigneePopoverOpen(prev => !prev)}
+                className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
+              >
+                <UserPlusIcon className="w-5 h-5 mr-2" />
+                Assign
+              </button>
+              {isAssigneePopoverOpen && (
+                <AssigneePopover
+                  boardMembers={boardMembers}
+                  cardAssigneeIds={assignees}
+                  onToggleAssignee={handleToggleAssignee}
+                  onClose={() => setIsAssigneePopoverOpen(false)}
+                />
+              )}
+              <button
+                onClick={() => setIsLabelPopoverOpen((prev) => !prev)}
+                className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
+              >
+                <SparklesIcon className="w-5 h-5 mr-2" />
+                Labels
+              </button>
+              {isLabelPopoverOpen && (
+                <LabelPopover
+                  boardLabels={boardLabels}
+                  // 5. --- UPDATE THIS PROP ---
+                  cardLabelIds={labels} // Use local 'labels' state, not cardData.labels
+                  onToggleLabel={handleToggleLabel}
+                  onCreateLabel={handleCreateLabel}
+                  onDeleteLabel={onLabelDelete}
+                  onClose={() => setIsLabelPopoverOpen(false)}
+                  userRole={userRole}
+                />
+              )}
+              <button
+                onClick={handleDuplicate}
+                className="flex items-center w-full p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition"
+              >
+                <DocumentDuplicateIcon className="w-5 h-5 mr-2" />
+                Duplicate
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex items-center w-full p-2 bg-gray-700 hover:bg-red-800 text-gray-200 hover:text-white rounded-md transition"
+              >
+                <TrashIcon className="w-5 h-5 mr-2" />
+                Delete
+              </button>
+            </div>
           </div>
-        </div>
         )}
       </div>
       {error && <p className="text-red-400 text-sm mt-4">{error}</p>}

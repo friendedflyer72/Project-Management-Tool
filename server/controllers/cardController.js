@@ -73,8 +73,16 @@ exports.updateCard = async (req, res) => {
 
     // 4. Update the card with all new fields
     const updatedCard = await db.query(
-      "UPDATE cards SET description = $1, due_date = $2, checklist = $3 WHERE id = $4 RETURNING *",
-      [description, due_date || null, JSON.stringify(checklist), id]
+      `UPDATE cards 
+       SET 
+         description = $1, 
+         due_date = $2, 
+         checklist = $3, 
+         updated_by = $4,  
+         updated_at = NOW()  
+       WHERE id = $5 
+       RETURNING *`,
+      [description, due_date || null, JSON.stringify(checklist), userId, id]
     );
 
     logActivity(userId, board_id, `Updated card: ${updatedCard.rows[0].title}`);
@@ -219,5 +227,57 @@ exports.duplicateCard = async (req, res) => {
     res.status(500).send('Server Error');
   } finally {
     client.release(); // ALWAYS release the client
+  }
+};
+exports.assignUserToCard = async (req, res) => {
+  const { card_id, user_id_to_assign } = req.body;
+  const { id: requestUserId } = req.user;
+
+  try {
+    // 1. Get board_id to check permissions
+    const result = await db.query(`SELECT l.board_id FROM cards c JOIN lists l ON c.list_id = l.id WHERE c.id = $1`, [card_id]);
+    const { board_id } = result.rows[0];
+
+    // 2. Check if request user has 'editor' access
+    const hasAccess = await checkBoardPermission(requestUserId, board_id, ['owner', 'editor']);
+    if (!hasAccess) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    // 3. Insert the assignment
+    await db.query(
+      "INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
+      [card_id, user_id_to_assign]
+    );
+    res.status(201).json({ msg: 'User assigned' });
+  } catch (err) {
+    if (err.code === '23505') return res.status(200).json({ msg: 'User already assigned.' });
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
+exports.removeUserFromCard = async (req, res) => {
+  const { card_id, user_id_to_remove } = req.body;
+  const { id: requestUserId } = req.user;
+
+  try {
+    // 1. Check permission
+    const result = await db.query(`SELECT l.board_id FROM cards c JOIN lists l ON c.list_id = l.id WHERE c.id = $1`, [card_id]);
+    const { board_id } = result.rows[0];
+    const hasAccess = await checkBoardPermission(requestUserId, board_id, ['owner', 'editor']);
+    if (!hasAccess) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    // 2. Delete the assignment
+    await db.query(
+      "DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2",
+      [card_id, user_id_to_remove]
+    );
+    res.json({ msg: 'User removed' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
   }
 };

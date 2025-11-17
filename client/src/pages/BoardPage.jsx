@@ -582,6 +582,8 @@ const BoardPage = () => {
                       onClick={() => setSelectedCard(card)}
                       // 1. PASS ALL BOARD LABELS TO THE CARD
                       boardLabels={board.labels}
+                      boardMembers={board.members}
+                      isViewer={isViewer}
                     />
                   ))}
                 </BoardList>
@@ -605,6 +607,7 @@ const BoardPage = () => {
         onBoardUpdate={handleBoardUpdate}
         boardId={board?.id}
         onLabelDelete={handleLabelDeleted}
+        boardMembers={board?.members}
       />
       <InviteModal
         isOpen={isInviteModalOpen}

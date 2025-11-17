@@ -45,6 +45,8 @@ export const createCard = (cardData) => apiClient.post('/cards', cardData);
 export const updateCard = (id, cardData) => apiClient.put(`/cards/${id}`, cardData);
 export const deleteCard = (id) => apiClient.delete(`/cards/${id}`);
 export const duplicateCard = (id) => apiClient.post(`/cards/${id}/duplicate`);
+export const assignUserToCard = (cardId, userId) => apiClient.post('/cards/assign', { card_id: cardId, user_id_to_assign: userId });
+export const removeUserFromCard = (cardId, userId) => apiClient.delete('/cards/remove-assignee', { data: { card_id: cardId, user_id_to_remove: userId }});
 
 // --- Label Functions
 export const createLabel = (labelData) => apiClient.post('/labels', labelData);

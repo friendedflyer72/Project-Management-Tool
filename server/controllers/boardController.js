@@ -62,9 +62,15 @@ exports.getBoardById = async (req, res) => {
         l.id AS list_id, l.name AS list_name, l.position AS list_position,
         c.id AS card_id, c.title AS card_title, c.description AS card_description,
         c.created_at AS card_created_at, c.due_date AS card_due_date, 
-        c.checklist AS card_checklist, c.position AS card_position
+        c.checklist AS card_checklist, c.position AS card_position,
+        
+       
+        c.updated_at AS card_updated_at,
+        u.username AS card_updated_by_username
+        
       FROM lists l
       LEFT JOIN cards c ON l.id = c.list_id
+      LEFT JOIN users u ON c.updated_by = u.id
       WHERE l.board_id = $1
       ORDER BY l.position, c.position;
     `;
@@ -94,16 +100,27 @@ exports.getBoardById = async (req, res) => {
       (SELECT u.id, u.username, bm.role FROM users u JOIN board_members bm ON u.id = bm.user_id WHERE bm.board_id = $1)
     `;
     const memberPromise = db.query(memberQuery, [boardId]);
+
+    // Query 6: Get card assignees
+    const cardAssigneeQuery = `
+      SELECT ca.card_id, ca.user_id
+      FROM card_assignees ca
+      JOIN cards c ON ca.card_id = c.id
+      JOIN lists l ON c.list_id = l.id
+      WHERE l.board_id = $1;
+    `;
+    const cardAssigneePromise = db.query(cardAssigneeQuery, [boardId]);
+
     // --- Wait for all queries to finish ---
-    const [listCardResult, labelResult, cardLabelResult, boardResult, memberResult] =
+    const [listCardResult, labelResult, cardLabelResult, boardResult, memberResult, cardAssigneeResult] =
       await Promise.all([
         listCardPromise,
         labelPromise,
         cardLabelPromise,
         boardPromise,
-        memberPromise
+        memberPromise,
+        cardAssigneePromise
       ]);
-
     // --- Start Hydration ---
     const board = boardResult.rows[0];
 
@@ -132,6 +149,7 @@ exports.getBoardById = async (req, res) => {
 
     const listsMap = new Map();
     const cardLabelLinks = cardLabelResult.rows;
+    const cardAssigneeLinks = cardAssigneeResult.rows
 
     listCardResult.rows.forEach(row => {
       // Create list if it doesn't exist
@@ -155,6 +173,9 @@ exports.getBoardById = async (req, res) => {
             const labelsForThisCard = cardLabelLinks
               .filter(link => link.card_id === row.card_id)
               .map(link => link.label_id);
+            const assigneesForThisCard = cardAssigneeLinks
+              .filter(link => link.card_id === row.card_id)
+              .map(link => link.user_id);
 
             card = {
               id: row.card_id,
@@ -164,7 +185,10 @@ exports.getBoardById = async (req, res) => {
               due_date: row.card_due_date,
               checklist: row.card_checklist,
               position: row.card_position,
-              labels: labelsForThisCard, // Add array of label IDs
+              labels: labelsForThisCard,
+              assignees: assigneesForThisCard,
+              updated_at: row.card_updated_at,
+              updated_by_username: row.card_updated_by_username
             };
             list.cards.push(card);
           }
@@ -330,7 +354,7 @@ exports.getBoardActivity = async (req, res) => {
     `;
     const { rows } = await db.query(query, [boardId]);
     res.json(rows);
-    
+
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

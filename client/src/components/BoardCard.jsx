@@ -1,8 +1,9 @@
 // src/components/BoardCard.jsx
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import BoardMembers from "./BoardMembers";
 
-const BoardCard = ({ card, onClick, boardLabels, isViewer }) => {
+const BoardCard = ({ card, onClick, boardLabels, boardMembers, isViewer }) => {
   const {
     attributes,
     listeners,
@@ -20,9 +21,14 @@ const BoardCard = ({ card, onClick, boardLabels, isViewer }) => {
 
   const getFullLabels = () => {
     if (!boardLabels || !card.labels) return [];
-    return card.labels.map(labelId => 
-      boardLabels.find(l => l.id === labelId)
-    ).filter(Boolean); // Filter out any undefined
+    return card.labels
+      .map((labelId) => boardLabels.find((l) => l.id === labelId))
+      .filter(Boolean); // Filter out any undefined
+  };
+
+  const getFullAssignees = () => {
+    if (!boardMembers || !card.assignees) return [];
+    return boardMembers.filter((member) => card.assignees.includes(member.id));
   };
 
   return (
@@ -32,12 +38,12 @@ const BoardCard = ({ card, onClick, boardLabels, isViewer }) => {
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className={`w-full text-left bg-gray-700 p-3 rounded-md shadow-sm hover:bg-gray-600 transition-colors ${isViewer ? 'cursor-pointer' : 'cursor-grab'} ${
-        isDragging ? 'ring-2 ring-pink-500' : ''
-      }`}
+      className={`w-full text-left bg-gray-700 p-3 rounded-md shadow-sm hover:bg-gray-600 transition-colors ${
+        isViewer ? "cursor-pointer" : "cursor-grab"
+      } ${isDragging ? "ring-2 ring-pink-500" : ""}`}
     >
       <div className="flex flex-wrap gap-1 mb-2">
-        {getFullLabels().map(label => (
+        {getFullLabels().map((label) => (
           <span
             key={label.id}
             className={`text-xs px-1.5 py-0.5 rounded-full ${label.color} text-white font-medium`}
@@ -47,6 +53,9 @@ const BoardCard = ({ card, onClick, boardLabels, isViewer }) => {
         ))}
       </div>
       <p className="text-sm text-gray-100">{card.title}</p>
+      <div className="mt-3">
+        <BoardMembers members={getFullAssignees()} />
+      </div>
     </div>
   );
 };
