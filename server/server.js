@@ -22,6 +22,7 @@ app.use('/api/boards', require('./routes/boards'));
 app.use('/api/lists', require('./routes/lists'));
 app.use('/api/cards', require('./routes/cards'));
 app.use('/api/labels', require('./routes/labels'));
+app.use('/api/ai', require('./routes/ai'));
 
 // === START SERVER ===
 const PORT = process.env.PORT || 5000;

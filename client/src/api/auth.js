@@ -35,6 +35,9 @@ export const inviteUserToBoard = (boardId, email, role) => {
 };
 export const getBoardActivity = (boardId) => apiClient.get(`/boards/${boardId}/activity`);
 
+// AI functions
+export const generateCardDescription = (title) => apiClient.post('/ai/generate-description', { title });
+
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);
 export const deleteList = (id) => apiClient.delete(`/lists/${id}`);

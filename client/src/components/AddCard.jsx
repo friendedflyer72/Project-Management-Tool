@@ -1,16 +1,30 @@
 // src/components/AddCard.jsx
 import { useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/solid';
+import { XMarkIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import { generateCardDescription } from '../api/auth';
 
 const AddCard = ({ listId, onCardCreated }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [cardTitle, setCardTitle] = useState('');
+  const [generatedDescription, setGeneratedDescription] = useState('');
+
+  const handleGenerateDescription = async () => {
+    if (!cardTitle) return;
+
+    try {
+      const res = await generateCardDescription(cardTitle);
+      setGeneratedDescription(res.data.description);
+    } catch (error) {
+      console.error('Error generating description:', error.response?.data || error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!cardTitle) return;
-    onCardCreated(cardTitle);
+    onCardCreated(cardTitle, generatedDescription);
     setCardTitle('');
+    setGeneratedDescription('');
     setIsEditing(false);
   };
 
@@ -34,7 +48,21 @@ const AddCard = ({ listId, onCardCreated }) => {
         placeholder="Enter a title for this card..."
         autoFocus
       />
+      {generatedDescription && (
+        <div className="p-2 bg-gray-700 rounded-md text-sm text-gray-300">
+          <h4 className="font-semibold text-white mb-1">Generated Description:</h4>
+          <p>{generatedDescription}</p>
+        </div>
+      )}
       <div className="flex items-center space-x-2">
+        <button
+          type="button"
+          onClick={handleGenerateDescription}
+          className="flex items-center px-4 py-2 bg-blue-500 text-white font-semibold rounded-md shadow-md hover:bg-blue-600"
+        >
+          <SparklesIcon className="w-5 h-5 mr-2" />
+          Generate
+        </button>
         <button
           type="submit"
           className="px-4 py-2 bg-violet-600 text-white font-semibold rounded-md shadow-md hover:bg-violet-700"

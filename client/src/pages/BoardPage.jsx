@@ -121,10 +121,14 @@ const BoardPage = () => {
       console.error("Failed to create list:", err);
     }
   };
-  const handleAddCard = async (cardTitle, listId) => {
+  const handleAddCard = async (cardTitle, description, listId) => {
     try {
       // 1. Get the full response
-      const response = await createCard({ title: cardTitle, list_id: listId });
+      const response = await createCard({
+        title: cardTitle,
+        description,
+        list_id: listId,
+      });
 
       // 2. Extract the new card from response.data
       const newCard = response.data;
@@ -571,7 +575,9 @@ const BoardPage = () => {
                   list={list}
                   cards={list.cards}
                   onDeleteList={handleDeleteList}
-                  onCardCreated={(title) => handleAddCard(title, list.id)}
+                  onCardCreated={(title, description) =>
+                    handleAddCard(title, description, list.id)
+                  }
                   isViewer={isViewer}
                 >
                   {/* We map the cards HERE and pass them as children */}

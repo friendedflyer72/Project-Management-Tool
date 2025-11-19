@@ -6,7 +6,7 @@ const { logActivity } = require('../utils/logActivity');
 
 exports.createCard = async (req, res) => {
   const io = getIO();
-  const { title, list_id } = req.body;
+  const { title, list_id, description } = req.body; // Added description
   const { id: userId } = req.user;
 
   try {
@@ -32,8 +32,8 @@ exports.createCard = async (req, res) => {
 
     // 4. Insert the new card
     const newCard = await db.query(
-      "INSERT INTO cards (title, list_id, position) VALUES ($1, $2, $3) RETURNING *",
-      [title, list_id, nextPosition]
+      "INSERT INTO cards (title, list_id, position, description) VALUES ($1, $2, $3, $4) RETURNING *",
+      [title, list_id, nextPosition, description || null] // Added description
     );
 
     logActivity(userId, board_id, `Created card: ${title}`);
