@@ -614,6 +614,7 @@ const BoardPage = () => {
         boardId={board?.id}
         onLabelDelete={handleLabelDeleted}
         boardMembers={board?.members}
+        userRole={userRole}
       />
       <InviteModal
         isOpen={isInviteModalOpen}

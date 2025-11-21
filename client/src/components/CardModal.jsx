@@ -1,5 +1,6 @@
 // src/components/CardModal.jsx
 import { useState, useEffect } from "react";
+import ReactMarkdown from 'react-markdown';
 import {
   updateCard,
   deleteCard,
@@ -53,6 +54,7 @@ const CardModal = ({
   const isViewer = userRole === "viewer";
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [assignees, setAssignees] = useState([]);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
 
   useEffect(() => {
     if (cardData) {
@@ -81,6 +83,16 @@ const CardModal = ({
   if (!isOpen || !cardData) return null;
 
   const handleSave = async () => {
+// create a function to check if its a viewer, if true then say Editor/owner can only edit
+    if (isViewer) {
+      setError("You do not have permission to edit this card.");
+      return;
+    }
+    // if (!description) {
+    //   setError("Please enter a card description.");
+    //   return;
+    // };
+
     try {
       const response = await updateCard(cardData.id, {
         description,
@@ -283,21 +295,39 @@ const CardModal = ({
         <div className="w-full md:w-2/3 space-y-4">
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={isViewer} // 5. Disable input
-              readOnly={isViewer} // for good measure
-              className="w-full p-2 h-32 ... disabled:opacity-70 disabled:cursor-not-allowed"
-              placeholder={
-                isViewer
-                  ? "No description provided."
-                  : "Add a more detailed description..."
-              }
-            />
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-gray-300">
+                Description
+              </label>
+              {!isViewer && (
+                <button
+                  onClick={() => setIsEditingDescription(!isEditingDescription)}
+                  className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded"
+                >
+                  {isEditingDescription ? 'Cancel' : 'Edit'}
+                </button>
+              )}
+            </div>
+            {isEditingDescription && !isViewer ? (
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full p-2 h-32 bg-gray-800 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                placeholder="Add a more detailed description... (Markdown supported)"
+                autoFocus
+              />
+            ) : (
+              <div
+                className="prose prose-invert prose-sm max-w-none p-2 h-32 bg-gray-700 rounded-md overflow-y-auto"
+                onClick={() => !isViewer && setIsEditingDescription(true)}
+              >
+                {description ? (
+                  <ReactMarkdown>{description}</ReactMarkdown>
+                ) : (
+                  <p className="text-gray-400">No description provided.</p>
+                )}
+              </div>
+            )}
           </div>
           {/* Due Date */}
           <div>
