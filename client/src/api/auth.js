@@ -37,6 +37,7 @@ export const getBoardActivity = (boardId) => apiClient.get(`/boards/${boardId}/a
 
 // AI functions
 export const generateCardDescription = (title) => apiClient.post('/ai/generate-description', { title });
+export const createTaskFromText = (text, boardId) =>  apiClient.post('/ai/parse-task', { text, boardId });
 
 // List functions
 export const createList = (listData) => apiClient.post('/lists', listData);

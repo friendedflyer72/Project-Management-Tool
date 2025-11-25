@@ -35,6 +35,7 @@ import CardModal from "../components/CardModal";
 import InviteModal from "../components/InviteModal";
 import BoardMembers from "../components/BoardMembers";
 import ActivityModal from "../components/ActivityModal";
+import NLTInput from "../components/NLTInput";
 
 const socket = io("http://localhost:5000");
 const BoardPage = () => {
@@ -479,6 +480,11 @@ const BoardPage = () => {
       </div>
     );
   }
+
+  // SAFETY CHECK
+  if (!board) {
+    return null; 
+  }
   const isViewer = userRole === "viewer";
 
   const handleLabelDeleted = async (labelId) => {
@@ -509,9 +515,9 @@ const BoardPage = () => {
   };
   console.log("RENDERING with userRole:", userRole);
   return (
-    <div className="min-h-screen flex flex-col text-gray-200">
+    <div className="min-h-screen relative flex flex-col text-gray-200">
       <Navbar />
-      <div className="absolute inset-0 -z-10 w-full h-full bg-gray-900">
+      <div className="absolute inset-0 -z-10 bg-gray-900">
         <Aurora
           colorStops={["#3A29FF", "#FF94B4", "#FF3232"]}
           blend={0.5}
@@ -556,6 +562,7 @@ const BoardPage = () => {
             </button>
           )}
         </div>
+        <NLTInput boardId={id} />
       </div>
       {/* Board Content (Lists) */}
       <DndContext

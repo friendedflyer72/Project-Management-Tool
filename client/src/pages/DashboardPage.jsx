@@ -78,10 +78,10 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col text-gray-200">
+    <div className="min-h-screen relative flex flex-col text-gray-200">
       {/* --- Navbar --- */}
       <Navbar />
-      <div className="absolute inset-0 -z-10 w-full h-full bg-gray-900">
+      <div className="absolute inset-0 -z-10 bg-gray-900">
         <Aurora
           colorStops={["#3A29FF", "#FF94B4", "#FF3232"]}
           blend={0.5}
@@ -90,7 +90,7 @@ const DashboardPage = () => {
         />
       </div>
       {/* --- Main Content --- */}
-      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8 relative z-10 flex-grow">
         {/* --- Header --- */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-3xl font-bold text-white">Your Boards</h2>
